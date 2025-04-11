@@ -1,0 +1,5 @@
+Nuitka==2.6.9
+ordered-set==4.1.0
+pycairo==1.27.0
+PyGObject==3.52.3
+zstandard==0.23.0
