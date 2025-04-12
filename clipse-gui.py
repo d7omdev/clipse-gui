@@ -7,11 +7,12 @@ from pathlib import Path
 
 # Ensure necessary GTK version
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk  # noqa: E402, F401
 
 # Set up basic logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="\033[1;37m%(asctime)s\033[0m - \033[1;34m%(name)s\033[0m - \033[1;32m%(levelname)s\033[0m - %(message)s",
 )
 log = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ def main():
     app = ClipseGuiApplication()
 
     # Run the application's main loop
-    exit_status = app.run(sys.argv)  # Pass command line arguments
+    exit_status = app.run(sys.argv)
     log.info(f"Application exited with status {exit_status}.")
     sys.exit(exit_status)
 
