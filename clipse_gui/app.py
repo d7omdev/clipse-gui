@@ -4,7 +4,6 @@ import os
 import threading
 import traceback
 from functools import partial
-import subprocess
 
 import gi
 
@@ -29,7 +28,6 @@ from .ui_components import create_list_row_widget, show_help_window, show_previe
 gi.require_version("Gtk", "3.0")
 from gi.repository import (  # noqa: E402
     Gdk,
-    GdkPixbuf,
     Gio,
     GLib,
     Gtk,
