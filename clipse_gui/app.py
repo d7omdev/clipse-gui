@@ -683,6 +683,13 @@ class ClipboardHistoryController:
         except Exception as e:
             log.error(f"Error resetting preview text size: {e}")
 
+    def on_help_window_close(self, window):
+        """Callback for when the help window is closed."""
+        window.destroy()
+        if self.window:
+            self.window.present()
+            self.window.grab_focus()
+
     def on_preview_key_press(self, preview_window, event):
         """Handles key presses within the preview window."""
         keyval = event.keyval
@@ -782,7 +789,7 @@ class ClipboardHistoryController:
             self.remove_selected_item()
             return True
         if keyval == Gdk.KEY_question:
-            show_help_window(self.window)
+            show_help_window(self.window, self.on_help_window_close)
             return True
         if keyval == Gdk.KEY_Tab:
             self.pin_filter_button.set_active(not self.pin_filter_button.get_active())

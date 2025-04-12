@@ -110,7 +110,7 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
 # --- Help Window ---
 
 
-def show_help_window(parent_window):
+def show_help_window(parent_window, close_cb):
     """Creates and shows the keyboard shortcuts help window."""
     help_window = Gtk.Window(title="Keyboard Shortcuts")
     help_window.set_type_hint(Gdk.WindowTypeHint.DIALOG)
@@ -176,7 +176,7 @@ def show_help_window(parent_window):
     help_window.add(main_box)
     help_window.connect(
         "key-press-event",
-        lambda w, e: w.destroy() if e.keyval == Gdk.KEY_Escape else None,
+        lambda w, e: close_cb(w) if e.keyval == Gdk.KEY_Escape else None,
     )
     help_window.show_all()
     close_btn.grab_focus()

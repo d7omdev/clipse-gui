@@ -34,6 +34,10 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
     - _Debian/Ubuntu:_ `sudo apt install libgtk-3-0 gir1.2-gtk-3.0 libcairo2 libgdk-pixbuf2.0-0` (most are usually installed)
     - _Fedora/RHEL:_ `sudo dnf install gtk3 cairo gdk-pixbuf2` (usually installed)
     - _Arch Linux:_ `sudo pacman -Syu gtk3 cairo gdk-pixbuf2` (usually installed)
+3.  wl-cipboard: Used for copying, if you don't already have it you need to install the `wl-clipboard` package manager.
+    - _Debian/Ubuntu:_ `sudo apt install wl-clipboard`
+    - _Fedora/RHEL:_ `sudo dnf install wl-clipboard`
+    - _Arch Linux:_ `sudo pacman -Syu wl-clipboard`
 
 ### Build/Install Dependencies (Only if Building from Source)
 
