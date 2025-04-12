@@ -85,9 +85,9 @@ This compiles the Python code to a native executable using Nuitka and installs i
 > **Note:** If you're using hyprland add these rules to your config for the best experience:
 
 ```bash
-windowrule = size 600 800,title:^(Clipse GUI)&
-windowrule = center, title:^(Clipse GUI)$
-windowrule = float, title:^(Clipse GUI)$
+windowrule = size 600 800,title:(Clipse GUI)
+windowrule = center, title:(Clipse GUI)
+windowrule = float, title:(Clipse GUI)
 ```
 
 ### Option 2: Run Directly from Source (for Development/Testing)
