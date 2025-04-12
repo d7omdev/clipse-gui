@@ -1,0 +1,4 @@
+[tool.pyright]
+reportMissingModuleSource = false
+reportOptionalMemberAccess = false
+reportAttributeAccessIssue = false

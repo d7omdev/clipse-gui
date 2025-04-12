@@ -1,43 +1,40 @@
-# clipse_gui/app.py
-import gi
-import os
-import sys
-import threading
-import time
 import logging
+import subprocess
+import os
+import threading
 import traceback
 from functools import partial
+import subprocess
 
-gi.require_version("Gtk", "3.0")
-from gi.repository import (
-    Gtk,
-    Gdk,
-    GdkPixbuf,
-    GLib,
-    Pango,
-    Gio,
-)
+import gi
 
-# Import from local package
 from .constants import (
-    APP_NAME,
-    HISTORY_FILE_PATH,
     APP_CSS,
+    APP_NAME,
     APPLICATION_ID,
-    DEFAULT_WINDOW_WIDTH,
     DEFAULT_WINDOW_HEIGHT,
+    DEFAULT_WINDOW_WIDTH,
+    HISTORY_FILE_PATH,
     IMAGE_CACHE_MAX_SIZE,
-    SAVE_DEBOUNCE_MS,
-    SEARCH_DEBOUNCE_MS,
     INITIAL_LOAD_COUNT,
     LOAD_BATCH_SIZE,
     LOAD_THRESHOLD_FACTOR,
-    LIST_ITEM_IMAGE_WIDTH,
-    LIST_ITEM_IMAGE_HEIGHT,
+    SAVE_DEBOUNCE_MS,
+    SEARCH_DEBOUNCE_MS,
 )
 from .data_manager import DataManager
 from .image_handler import ImageHandler
 from .ui_components import create_list_row_widget, show_help_window, show_preview_window
+
+gi.require_version("Gtk", "3.0")
+from gi.repository import (  # noqa: E402
+    Gdk,
+    GdkPixbuf,
+    Gio,
+    GLib,
+    Gtk,
+    Pango,
+)
 
 log = logging.getLogger(__name__)
 
@@ -169,6 +166,16 @@ class ClipboardHistoryController:
         self.update_filtered_items()
         if not self.items:
             self.status_label.set_text("No history items found. Press ? for help.")
+        else:
+            GLib.idle_add(self._focus_first_item)
+        return False
+
+    def _focus_first_item(self):
+        """Selects and focuses the first item in the list."""
+        if len(self.list_box.get_children()) > 0:
+            first_row = self.list_box.get_row_at_index(0)
+            self.list_box.select_row(first_row)
+            first_row.grab_focus()
         return False
 
     # --- Data Handling ---
@@ -336,8 +343,8 @@ class ClipboardHistoryController:
                     pin_icon = hbox.get_children()[-1]
                     if isinstance(pin_icon, Gtk.Image):
                         pin_icon.set_from_icon_name(
-                            "starred" if is_pinned else "non-starred-symbolic",
-                            Gtk.IconSize.MENU,
+                            "starred-symbolic" if is_pinned else "non-starred-symbolic",
+                            Gtk.IconSize.BUTTON,
                         )
                         pin_icon.set_tooltip_text(
                             "Pinned" if is_pinned else "Not Pinned"
@@ -505,40 +512,113 @@ class ClipboardHistoryController:
                 row.filtered_index = idx
         return removed_filtered_index
 
+    def copy_text_to_clipboard_wl(self, text_value):
+        """Use wl-copy to place text into the clipboard on Wayland."""
+        try:
+            process = subprocess.Popen(
+                ["wl-copy"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            process.stdin.write(text_value.encode("utf-8"))
+            process.stdin.close()
+
+            self.flash_status("Text copied to clipboard using wl-copy")
+            return True
+        except Exception as e:
+            log.error(f"Error invoking wl-copy: {e}")
+            self.flash_status(f"Error copying text: {str(e)}")
+            return False
+
+    def copy_image_to_clipboard_wl(self, image_path):
+        """Use wl-copy to place an image into the clipboard on Wayland."""
+        try:
+            if not os.path.isfile(image_path):
+                log.error(f"Image file does not exist: {image_path}")
+                self.flash_status("Error: Image file not found")
+                return False
+
+            image_ext = os.path.splitext(image_path)[1].lower()
+            mimetype = f"image/{image_ext.lstrip('.')}"
+            process = subprocess.Popen(
+                ["wl-copy", "-t", mimetype],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            with open(image_path, "rb") as img_file:
+                while chunk := img_file.read(4096):
+                    process.stdin.write(chunk)
+
+            process.stdin.close()
+
+            self.flash_status("Image copied to clipboard using wl-copy")
+            return True
+        except Exception as e:
+            log.error(f"Error copying image with wl-copy: {e}")
+            self.flash_status(f"Error copying image: {str(e)}")
+            return False
+
     def copy_selected_item_to_clipboard(self):
-        """Copies the selected item's content to the system clipboard."""
+        """Copies the selected item to the system clipboard using wl-copy on Wayland,
+        then closes the window after a short delay."""
         selected_row = self.list_box.get_selected_row()
+        exit_timeout = 100
         if not selected_row:
+            log.warning("Copy called with no row selected.")
             return
+
+        for attr in ("item_index", "is_image", "item_value"):
+            if not hasattr(selected_row, attr):
+                log.error(f"Selected row missing expected attribute: {attr}")
+                self.flash_status("Error: Invalid selected item data.")
+                return
+
         try:
             original_index = selected_row.item_index
             if not (0 <= original_index < len(self.items)):
                 self.flash_status("Error: Selected item no longer exists.")
                 return
+
             item = self.items[original_index]
-            clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+
+            def close_window_callback(window):
+                if window and window.get_realized():
+                    window.get_application().quit()
+                return False
+
             if selected_row.is_image:
                 image_path = item.get("filePath")
                 if image_path and os.path.exists(image_path):
-                    try:
-                        pixbuf = GdkPixbuf.Pixbuf.new_from_file(image_path)
-                        clipboard.set_image(pixbuf)
-                        clipboard.store()
-                        self.flash_status("Image copied to clipboard")
-                        GLib.timeout_add(100, self.window.destroy)
-                    except Exception as e:
-                        log.error(f"Failed to copy image data: {e}")
-                        self.flash_status(f"Error copying image: {e}")
+                    if self.copy_image_to_clipboard_wl(image_path):
+                        # Close window after successful copy
+                        GLib.timeout_add(
+                            exit_timeout, partial(close_window_callback, self.window)
+                        )
+                    else:
+                        self.flash_status("Failed to copy image with wl-copy")
                 else:
                     self.flash_status("Image path invalid or file missing")
             else:
                 text_value = selected_row.item_value
-                clipboard.set_text(text_value, -1)
-                clipboard.store()
-                self.flash_status("Text copied to clipboard")
-                GLib.timeout_add(100, self.window.destroy)
+                if text_value:
+                    if self.copy_text_to_clipboard_wl(text_value):
+                        # Close window after successful copy
+                        GLib.timeout_add(
+                            exit_timeout, partial(close_window_callback, self.window)
+                        )
+                    else:
+                        self.flash_status("Failed to copy text with wl-copy")
+                else:
+                    self.flash_status("Cannot copy empty text.")
         except Exception as e:
             log.error(f"Unexpected error during copy: {e}")
+            import traceback
+
+            traceback.print_exc()
             self.flash_status(f"Error copying: {str(e)}")
 
     def show_item_preview(self):
@@ -609,6 +689,8 @@ class ClipboardHistoryController:
         ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
         if keyval == Gdk.KEY_Escape:
             preview_window.destroy()
+            self.window.present()
+            self.window.grab_focus()
             return True
         if keyval == Gdk.KEY_c and ctrl:
             widget_to_search = preview_window.get_child()
@@ -647,16 +729,27 @@ class ClipboardHistoryController:
                 if self.search_entry.get_text():
                     self.search_entry.set_text("")
                 else:
-                    self.list_box.grab_focus()
+                    self.window.get_application().quit()
                 return True
             if keyval in [Gdk.KEY_Up, Gdk.KEY_Down]:
                 if len(self.list_box.get_children()) > 0:
                     self.list_box.grab_focus()
                     return False
+            if keyval == Gdk.KEY_Tab:
+                self.pin_filter_button.set_active(
+                    not self.pin_filter_button.get_active()
+                )
+                GLib.idle_add(self._focus_first_item)
+                return True
+            if keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
+                if len(self.list_box.get_children()) > 0:
+                    first_row = self.list_box.get_row_at_index(0)
+                    self.list_box.select_row(first_row)
+                    return self.copy_selected_item_to_clipboard()
             return False
 
         # List Box Focus / General Keys
-        selected_row = self.list_box.get_selected_row()
+        self.list_box.get_selected_row()
         if keyval == Gdk.KEY_k:
             return self.list_box.emit(
                 "move-cursor", Gtk.MovementStep.DISPLAY_LINES, -1, False
@@ -695,7 +788,7 @@ class ClipboardHistoryController:
             self.pin_filter_button.set_active(not self.pin_filter_button.get_active())
             return True
         if keyval == Gdk.KEY_Escape:
-            self.window.destroy()
+            self.window.get_application().quit()
             return True
         if ctrl and keyval in [Gdk.KEY_plus, Gdk.KEY_equal]:
             self.zoom_level = min(3.0, self.zoom_level * 1.1)
@@ -740,7 +833,9 @@ class ClipboardHistoryController:
         """Handles toggling the 'Pinned Only' filter button."""
         self.show_only_pinned = button.get_active()
         log.debug(f"Pin filter toggled: {'ON' if self.show_only_pinned else 'OFF'}")
+
         self.update_filtered_items()
+        self._focus_first_item()
 
     # --- Scrolling Helpers ---
     def scroll_to_bottom(self):
