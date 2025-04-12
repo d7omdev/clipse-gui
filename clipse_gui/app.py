@@ -758,13 +758,9 @@ class ClipboardHistoryController:
         # List Box Focus / General Keys
         self.list_box.get_selected_row()
         if keyval == Gdk.KEY_k:
-            return self.list_box.emit(
-                "move-cursor", Gtk.MovementStep.DISPLAY_LINES, -1, False
-            )
+            return self.list_box.emit("move-cursor", Gtk.MovementStep.DISPLAY_LINES, -1)
         if keyval == Gdk.KEY_j:
-            return self.list_box.emit(
-                "move-cursor", Gtk.MovementStep.DISPLAY_LINES, 1, False
-            )
+            return self.list_box.emit("move-cursor", Gtk.MovementStep.DISPLAY_LINES, 1)
         if keyval == Gdk.KEY_Home:
             if len(self.list_box.get_children()) > 0:
                 self.list_box.select_row(self.list_box.get_row_at_index(0))
