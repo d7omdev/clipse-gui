@@ -60,7 +60,21 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
 
 Choose the method that best suits you:
 
-### Option 1: Build and Install from Source
+### Option 1: Install from AUR
+
+If you're using Arch Linux, you can install `clipse-gui` directly from the AUR (Arch User Repository) using an AUR helper like `yay` or `paru`.
+
+1.  **Install AUR Helper:** If you don't have one, install `yay` or `paru` (or any other AUR helper).
+    ```bash
+    sudo pacman -Syu yay
+    ```
+2.  **Install `clipse-gui`:**
+    ```bash
+    yay -S clipse-gui
+    ```
+3.  **Run:** After installation, run `clipse-gui` from your terminal or find "Clipse GUI" in your application menu.
+
+### Option 2: Build and Install from Source
 
 This compiles the Python code to a native executable using Nuitka and installs it system-wide (typically to `/usr/local`). Best if you want the latest code or need to build for your specific architecture.
 
@@ -90,7 +104,7 @@ windowrule = center, title:(Clipse GUI)
 windowrule = float, title:(Clipse GUI)
 ```
 
-### Option 2: Run Directly from Source (for Development/Testing)
+### Option 3: Run Directly from Source (for Development/Testing)
 
 This runs the application using the Python interpreter without building a standalone executable. Requires installing more dependencies manually.
 
