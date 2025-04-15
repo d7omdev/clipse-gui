@@ -65,9 +65,14 @@ Choose the method that best suits you:
 If you're using Arch Linux, you can install `clipse-gui` directly from the AUR (Arch User Repository) using an AUR helper like `yay` or `paru`.
 
 1.  **Install AUR Helper:** If you don't have one, install `yay` or `paru` (or any other AUR helper).
+
     ```bash
-    sudo pacman -Syu yay
+    sudo pacman -S --needed git base-devel
+    git clone https://aur.archlinux.org/yay.git
+    cd yay
+    makepkg -si
     ```
+
 2.  **Install `clipse-gui`:**
     ```bash
     yay -S clipse-gui

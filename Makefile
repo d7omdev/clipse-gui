@@ -1,4 +1,3 @@
-
 # Makefile for Clipse GUI
 
 # --- Variables ---
@@ -16,11 +15,12 @@ BIN_DIR := $(PREFIX)/bin
 SHARE_DIR := $(PREFIX)/share
 APP_DIR := $(SHARE_DIR)/$(APP_NAME)
 ICON_DEST_DIR := $(SHARE_DIR)/icons/hicolor/128x128/apps
+ICON_CACHE_DIR := $(SHARE_DIR)/icons/hicolor
 DESKTOP_DEST_DIR := $(SHARE_DIR)/applications
 TMP_DESKTOP_FILE := /tmp/$(DESKTOP_FILE)
 
 NUITKA_DIST_DIR := $(APP_NAME).dist
-NUITKA_BINARY := $(APP_NAME).bin
+NUITKA_BINARY := $(APP_NAME)
 
 NUITKA_OPTS := \
   --standalone \
@@ -61,13 +61,16 @@ install: nuitka
 	@sudo install -d "$(APP_DIR)"
 	@sudo cp -r "$(BUILD_DIR)/$(NUITKA_DIST_DIR)/." "$(APP_DIR)/"
 
-	@sudo mv "$(APP_DIR)/$(NUITKA_BINARY)" "$(APP_DIR)/$(APP_NAME)"
-	@sudo ln -sf "$(APP_DIR)/$(APP_NAME)" "$(BIN_DIR)/$(APP_NAME)"
+	@sudo ln -sf "$(APP_DIR)/$(NUITKA_BINARY)" "$(BIN_DIR)/$(APP_NAME)"
 
 	@if [ -f "$(ICON_FILE)" ]; then \
 		echo "Installing icon..."; \
 		sudo install -Dm644 "$(ICON_FILE)" "$(ICON_DEST_DIR)/$(ICON_NAME).png"; \
-		sudo gtk-update-icon-cache -f -t "$(SHARE_DIR)/icons/hicolor"; \
+		if [ -f "$(ICON_CACHE_DIR)/index.theme" ]; then \
+			sudo gtk-update-icon-cache "$(ICON_CACHE_DIR)"; \
+		else \
+			echo "Skipping icon cache update: index.theme not found in $(ICON_CACHE_DIR)"; \
+		fi; \
 	fi
 
 	@echo "Creating .desktop file..."
@@ -84,10 +87,10 @@ install: nuitka
 		"Terminal=false" \
 		"Categories=Utility;GTK;" \
 		"StartupNotify=true" \
-		"StartupWMClass=org.d7om.ClipseGUI" > $(TMP_DESKTOP_FILE)
+		"StartupWMClass=org.d7om.ClipseGUI" > "$(TMP_DESKTOP_FILE)"
 
-	@sudo install -Dm644 $(TMP_DESKTOP_FILE) "$(DESKTOP_DEST_DIR)/$(DESKTOP_FILE)"
-	@rm -f $(TMP_DESKTOP_FILE)
+	@sudo install -Dm644 "$(TMP_DESKTOP_FILE)" "$(DESKTOP_DEST_DIR)/$(DESKTOP_FILE)"
+	@rm -f "$(TMP_DESKTOP_FILE)"
 
 	@echo "Updating desktop database..."
 	@sudo update-desktop-database -q "$(DESKTOP_DEST_DIR)"
@@ -101,7 +104,11 @@ uninstall:
 	@if [ -f "$(ICON_DEST_DIR)/$(ICON_NAME).png" ]; then \
 		echo "Removing icon..."; \
 		sudo rm -f "$(ICON_DEST_DIR)/$(ICON_NAME).png"; \
-		sudo gtk-update-icon-cache -f -t "$(SHARE_DIR)/icons/hicolor"; \
+		if [ -f "$(ICON_CACHE_DIR)/index.theme" ]; then \
+			sudo gtk-update-icon-cache "$(ICON_CACHE_DIR)"; \
+		else \
+			echo "Skipping icon cache update: index.theme not found in $(ICON_CACHE_DIR)"; \
+		fi; \
 	fi
 
 	@echo "Updating desktop database..."
@@ -109,7 +116,7 @@ uninstall:
 
 clean:
 	@echo "Cleaning build files..."
-	find . -type f -name '*.pyc' -delete
-	find . -type d -name '__pycache__' -exec rm -rf {} +
-	rm -rf build/ dist/ *.spec *.build/ $(TMP_DESKTOP_FILE)
+	@find . -type f -name '*.pyc' -delete
+	@find . -type d -name '__pycache__' -exec rm -rf {} +
+	@rm -rf build/ dist/ *.spec *.build/ "$(TMP_DESKTOP_FILE)"
 
