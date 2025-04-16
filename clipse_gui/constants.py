@@ -31,6 +31,12 @@ IMAGE_CACHE_MAX_SIZE = 50
 SAVE_DEBOUNCE_MS = 500
 SEARCH_DEBOUNCE_MS = 250
 
+COMPACT_MODE = True
+ENTER_TO_PASTE = True
+PASTE_TOOL_CMD = "wl-paste --no-newline"
+X11_PASTE_TOOL_CMD = "xclip -o -selection clipboard"
+
+
 # --- CSS Styling ---
 APP_CSS = """
 .pinned-row {
