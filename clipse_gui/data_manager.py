@@ -15,9 +15,10 @@ logging.basicConfig(
 class DataManager:
     """Handles loading and saving clipboard history data."""
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, update_callback=None):
         self.file_path = file_path
         self._save_lock = threading.Lock()  # Lock for saving operation
+        self.update_callback = update_callback
 
     def load_history(self):
         """Loads history from the JSON file."""
@@ -83,3 +84,31 @@ class DataManager:
                 log.error(f"Error saving history to {self.file_path}: {e}")
                 if callback_on_error:
                     GLib.idle_add(callback_on_error, f"Error saving: {e}")
+
+    def _start_history_watcher(self, callback, interval_ms=300):
+        """Starts a periodic file watcher to sync clipboard history."""
+        self._last_file_content = None
+
+        def check_for_changes():
+            try:
+                if not os.path.exists(self.file_path):
+                    return True
+
+                with open(self.file_path, "r", encoding="utf-8") as f:
+                    current_content = f.read()
+
+                if self._last_file_content is None:
+                    self._last_file_content = current_content
+                    return True
+
+                if current_content != self._last_file_content:
+                    self._last_file_content = current_content
+                    log.info("History file updated. Reloading...")
+                    loaded_items = self.load_history()
+                    GLib.idle_add(callback, loaded_items)
+            except Exception as e:
+                log.error(f"Error while watching history file: {e}")
+
+            return True
+
+        GLib.timeout_add(interval_ms, check_for_changes)

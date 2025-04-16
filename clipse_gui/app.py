@@ -60,7 +60,7 @@ class ClipboardHistoryController:
         self._vadjustment_handler_id = None
 
         # --- Initialize Managers ---
-        self.data_manager = DataManager(HISTORY_FILE_PATH)
+        self.data_manager = DataManager(HISTORY_FILE_PATH, self._on_history_updated)
         self.image_handler = ImageHandler(IMAGE_CACHE_MAX_SIZE)
 
         # --- Build UI Content ---
@@ -153,15 +153,26 @@ class ClipboardHistoryController:
         else:
             log.debug("CSS provider already exists.")
 
+    def _on_history_updated(self, loaded_items):
+        """Callback function called when the file is updated."""
+        self.items = loaded_items
+        self.update_filtered_items()
+        self._focus_first_item()
+
     def _load_initial_data(self):
         """Loads history in background thread."""
         loaded_items = self.data_manager.load_history()
+
         GLib.idle_add(self._finish_initial_load, loaded_items)
+
+        self.data_manager._start_history_watcher(self._on_history_updated)
 
     def _finish_initial_load(self, loaded_items):
         """Updates UI after initial data load."""
         self.items = loaded_items
+
         self.update_filtered_items()
+
         if not self.items:
             self.status_label.set_text("No history items found. Press ? for help.")
         else:
