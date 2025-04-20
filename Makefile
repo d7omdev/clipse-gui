@@ -49,8 +49,13 @@ help:
 	@echo "  clean      - Clean build and temp files"
 
 run:
-	@echo "Starting Clipse GUI from source..."
-	$(PYTHON) $(APP_SCRIPT)
+	@echo "Running Clipse GUI..."
+	@$(PYTHON) $(APP_SCRIPT)
+
+watch:
+	@echo "Starting Clipse GUI in watch mode..."
+	watchmedo auto-restart --directory=. --pattern="*.py" --recursive -- \
+		$(PYTHON) $(APP_SCRIPT)
 
 nuitka:
 	@echo "Building standalone app using Nuitka..."

@@ -26,8 +26,8 @@ class ImageHandler:
         except GLib.Error as e:
             # Don't log common errors like file not found frequently
             if not e.matches(
-                GdkPixbuf.PixbufError, GdkPixbuf.PixbufError.FAILED
-            ) and not e.matches(GLib.FileError, GLib.FileError.NOENT):
+                GdkPixbuf.PixbufError.FAILED, GdkPixbuf.PixbufError.FAILED
+            ) and not e.matches(GLib.FileError.NOENT, GLib.FileError.NOENT):
                 log.warning(
                     f"Failed to load/scale image {os.path.basename(image_path)}: {e.message}"
                 )

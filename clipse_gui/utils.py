@@ -1,6 +1,4 @@
-import re
 from datetime import datetime, timedelta
-from gi.repository import Gdk
 
 
 def format_date(date_str):
