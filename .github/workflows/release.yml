@@ -1,38 +1,90 @@
 name: Release & AUR Update
-
 on:
   push:
     tags:
       - "v*.*.*"
-
 permissions:
   contents: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
-
+    environment: main
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate release description
+        id: release_description
+        run: |
+          cat > release_body.md << EOF
+          # Clipse GUI v${{ steps.get_version.outputs.version }}
+
+          Clipse GUI is a graphical interface for the Clipse clipboard manager.
+
+          ## 📋 Key Features
+          - Easily manage clipboard history
+          - Powerful search capabilities
+          - Intuitive user interface
+          - Customizable settings
+
+          ## 🚀 Installation
+          ### Arch Linux
+          ```bash
+          yay -S clipse-gui
+          ```
+
+          ### Manual Installation
+          See [installation instructions](https://github.com/d7omdev/clipse-gui#installation) for details.
+
+          ## 🔄 Changelog
+          See below for a full list of changes in this release.
+          EOF
+
+          DESCRIPTION=$(cat release_body.md)
+          # This handles multiline strings correctly in GitHub Actions
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          name: "Release v${{ steps.get_version.outputs.version }}"
+          body: ${{ steps.release_description.outputs.description }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+  update-aur:
+    runs-on: ubuntu-latest
+    environment: main
+    needs: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Install Arch Linux tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y base-devel
 
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Extract version
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref }}
-          name: "Release ${{ github.ref }}"
-          generate_release_notes: true
-
-      - name: Clone AUR repo
+      - name: Set up SSH
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
@@ -40,15 +92,37 @@ jobs:
           echo "$AUR_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa aur.archlinux.org >> ~/.ssh/known_hosts
+
+      - name: Clone AUR repo
+        run: |
           git clone ssh://aur@aur.archlinux.org/clipse-gui.git aur-repo
 
-      - name: Update PKGBUILD version
+      - name: Update PKGBUILD
         run: |
           cd aur-repo
+          git config --global --add safe.directory "$(pwd)"
           sed -i "s/^pkgver=.*/pkgver=${{ steps.get_version.outputs.version }}/" PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-          updpkgsums
-          makepkg --printsrcinfo > .SRCINFO
+
+      - name: Setup Arch environment for AUR operations
+        uses: addnab/docker-run-action@v3
+        with:
+          image: archlinux:latest
+          options: -v ${{ github.workspace }}/aur-repo:/work
+          run: |
+            pacman -Syu --noconfirm
+            pacman -S --noconfirm base-devel git
+            cd /work
+            chown -R 1000:1000 .
+            useradd -m builder
+            echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+            su - builder -c "cd /work && updpkgsums"
+            su - builder -c "cd /work && makepkg --printsrcinfo > .SRCINFO"
+            ls -la /work
+
+      - name: Commit and push AUR update
+        run: |
+          cd aur-repo
           git add PKGBUILD .SRCINFO
-          git commit -m "v${{ steps.get_version.outputs.version }}"
+          git commit -m "Update to v${{ steps.get_version.outputs.version }}"
           git push

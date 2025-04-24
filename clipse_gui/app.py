@@ -1,869 +1,16 @@
 import logging
-import subprocess
-import os
-import threading
-import traceback
-from functools import partial
-
-import gi
-
+from . import constants
 from .constants import (
-    APP_CSS,
     APP_NAME,
     APPLICATION_ID,
     DEFAULT_WINDOW_HEIGHT,
     DEFAULT_WINDOW_WIDTH,
-    HISTORY_FILE_PATH,
-    IMAGE_CACHE_MAX_SIZE,
-    INITIAL_LOAD_COUNT,
-    LOAD_BATCH_SIZE,
-    LOAD_THRESHOLD_FACTOR,
-    SAVE_DEBOUNCE_MS,
-    SEARCH_DEBOUNCE_MS,
 )
-from .data_manager import DataManager
-from .image_handler import ImageHandler
-from .ui_components import create_list_row_widget, show_help_window, show_preview_window
+from .controller import ClipboardHistoryController
 
-gi.require_version("Gtk", "3.0")
-from gi.repository import (  # noqa: E402
-    Gdk,
-    Gio,
-    GLib,
-    Gtk,
-    Pango,
-)
+from gi.repository import Gtk, Gio, GLib  # noqa: E402
 
 log = logging.getLogger(__name__)
-
-
-# --- Main Application Logic/View Controller ---
-class ClipboardHistoryController:
-    def __init__(self, application_window: Gtk.ApplicationWindow):
-        """
-        Initializes the controller managing the content of the main window.
-
-        Args:
-            application_window: The main Gtk.ApplicationWindow this controller manages.
-        """
-        self.window = application_window
-        self.items = []
-        self.filtered_items = []
-        self.show_only_pinned = False
-        self.zoom_level = 1.0
-        self.search_term = ""
-
-        # --- State Flags ---
-        self._loading_more = False
-        self._save_timer_id = None
-        self._search_timer_id = None
-        self._vadjustment_handler_id = None
-
-        # --- Initialize Managers ---
-        self.data_manager = DataManager(HISTORY_FILE_PATH, self._on_history_updated)
-        self.image_handler = ImageHandler(IMAGE_CACHE_MAX_SIZE)
-
-        # --- Build UI Content ---
-        self.main_box = self._build_ui_content()
-
-        self.window.add(self.main_box)
-
-        self.window.connect("key-press-event", self.on_key_press)
-        self.window.connect("destroy", self.on_window_destroy)
-
-        # --- Load Initial Data ---
-        self.status_label.set_text("Loading history...")
-        threading.Thread(target=self._load_initial_data, daemon=True).start()
-
-        self._apply_css()
-        self.update_zoom()
-
-    def _build_ui_content(self) -> Gtk.Box:
-        """Creates the main vertical box containing all UI elements."""
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        main_box.set_margin_top(10)
-        main_box.set_margin_bottom(10)
-        main_box.set_margin_start(10)
-        main_box.set_margin_end(10)
-
-        # --- Header ---
-        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        self.search_entry = Gtk.SearchEntry(placeholder_text="Search...")
-        self.search_entry.connect("search-changed", self.on_search_changed)
-        header_box.pack_start(self.search_entry, True, True, 0)
-
-        self.pin_filter_button = Gtk.ToggleButton(label="Pinned Only")
-        self.pin_filter_button.set_active(self.show_only_pinned)
-        self.pin_filter_button.connect("toggled", self.on_pin_filter_toggled)
-        header_box.pack_start(self.pin_filter_button, False, False, 0)
-        main_box.pack_start(header_box, False, False, 5)
-
-        # --- List View ---
-        self.scrolled_window = Gtk.ScrolledWindow()
-        self.scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        main_box.pack_start(self.scrolled_window, True, True, 0)
-
-        self.vadj = self.scrolled_window.get_vadjustment()
-        if self.vadj:
-            self._vadjustment_handler_id = self.vadj.connect(
-                "value-changed", self.on_vadjustment_changed
-            )
-        else:
-            log.warning("Could not get vertical adjustment for lazy loading.")
-
-        self.viewport = Gtk.Viewport()
-        self.scrolled_window.add(self.viewport)
-
-        self.list_box = Gtk.ListBox()
-        self.list_box.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.list_box.connect("row-activated", self.on_row_activated)
-        self.list_box.connect("size-allocate", self.on_list_box_size_allocate)
-        self.viewport.add(self.list_box)
-
-        # --- Status Bar ---
-        self.status_label = Gtk.Label(label="Initializing...")
-        self.status_label.set_halign(Gtk.Align.START)
-        self.status_label.get_style_context().add_class("status-label")
-
-        main_box.pack_end(self.status_label, False, False, 0)
-
-        return main_box
-
-    def _apply_css(self):
-        """Applies the application-wide CSS."""
-        screen = Gdk.Screen.get_default()
-        if not screen:
-            log.error("Cannot get default GdkScreen to apply CSS")
-            return
-
-        if not hasattr(self, "style_provider"):
-            log.debug("Creating and adding application CSS provider.")
-            self.style_provider = Gtk.CssProvider()
-            try:
-                self.style_provider.load_from_data(APP_CSS.encode())
-                Gtk.StyleContext.add_provider_for_screen(
-                    screen,
-                    self.style_provider,
-                    Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-                )
-            except GLib.Error as e:
-                log.error(f"Failed to load or add CSS provider: {e}")
-            except Exception as e:
-                log.error(f"Unexpected error applying CSS: {e}")
-        else:
-            log.debug("CSS provider already exists.")
-
-    def _on_history_updated(self, loaded_items):
-        """Callback function called when the file is updated."""
-        self.items = loaded_items
-        self.update_filtered_items()
-        self._focus_first_item()
-
-    def _load_initial_data(self):
-        """Loads history in background thread."""
-        loaded_items = self.data_manager.load_history()
-
-        GLib.idle_add(self._finish_initial_load, loaded_items)
-
-        self.data_manager._start_history_watcher(self._on_history_updated)
-
-    def _finish_initial_load(self, loaded_items):
-        """Updates UI after initial data load."""
-        self.items = loaded_items
-
-        self.update_filtered_items()
-
-        if not self.items:
-            self.status_label.set_text("No history items found. Press ? for help.")
-        else:
-            GLib.idle_add(self._focus_first_item)
-        return False
-
-    def _focus_first_item(self):
-        """Selects and focuses the first item in the list."""
-        if len(self.list_box.get_children()) > 0:
-            first_row = self.list_box.get_row_at_index(0)
-            self.list_box.select_row(first_row)
-            first_row.grab_focus()
-        return False
-
-    # --- Data Handling ---
-    def update_filtered_items(self):
-        """Filters master list based on search and pin status."""
-        self.filtered_items = []
-        search_term_lower = self.search_term.lower()
-
-        for index, item in enumerate(self.items):
-            is_pinned = item.get("pinned", False)
-
-            if self.show_only_pinned and not is_pinned:
-                continue
-
-            if search_term_lower:
-                item_value = item.get("value", "").lower()
-                if search_term_lower not in item_value:
-                    if not (
-                        item.get("filePath")
-                        and search_term_lower in item.get("filePath", "").lower()
-                    ):
-                        continue
-
-            self.filtered_items.append({"original_index": index, "item": item})
-
-        # Populate the list view with the filtered items
-        self.populate_list_view()
-        self.update_status_label()
-        GLib.idle_add(self.check_load_more)
-
-    def schedule_save_history(self):
-        """Schedules saving the history after a debounce delay."""
-        if self._save_timer_id:
-            GLib.source_remove(self._save_timer_id)
-        self._save_timer_id = GLib.timeout_add(SAVE_DEBOUNCE_MS, self._trigger_save)
-
-    def _trigger_save(self):
-        """Calls the DataManager to save history."""
-        log.debug("Triggering history save.")
-        # Pass the error handling callback
-        self.data_manager.save_history(self.items, self._handle_save_error)
-        self._save_timer_id = None
-        return False
-
-    def _handle_save_error(self, error_message):
-        """Callback for DataManager save errors."""
-        self.flash_status(error_message)
-
-    # --- UI Population and Updates---
-    def populate_list_view(self):
-        """Clears and populates the list view with the initial batch of filtered items."""
-        if not self.list_box:
-            return
-
-        if self.vadj and self._vadjustment_handler_id:
-            try:
-                self.vadj.disconnect(self._vadjustment_handler_id)
-            except TypeError:
-                pass
-            self._vadjustment_handler_id = None
-
-        self.list_box.freeze_child_notify()
-        for child in self.list_box.get_children():
-            self.list_box.remove(child)
-        self.list_box.thaw_child_notify()
-
-        self._loading_more = False
-
-        load_count = min(INITIAL_LOAD_COUNT, len(self.filtered_items))
-        log.debug(f"Populating initial {load_count} rows.")
-        if load_count > 0:
-            self._create_rows_range(0, load_count)
-            self.list_box.show_all()
-
-        if self.vadj and not self._vadjustment_handler_id:
-            self._vadjustment_handler_id = self.vadj.connect(
-                "value-changed", self.on_vadjustment_changed
-            )
-
-    def _create_rows_range(self, start_idx, end_idx):
-        """Creates and adds rows for a given range of filtered items."""
-        end_idx = min(end_idx, len(self.filtered_items))
-        log.debug(f"Creating rows from filtered index {start_idx} to {end_idx - 1}")
-
-        for i in range(start_idx, end_idx):
-            if i < len(self.filtered_items):
-                item_info = self.filtered_items[i]
-                item_info["filtered_index"] = i
-                row = create_list_row_widget(
-                    item_info, self.image_handler, self._update_row_image_widget
-                )
-                if row:
-                    self.list_box.add(row)
-            else:
-                log.warning(f"Attempted to create row for out-of-bounds index {i}")
-
-    def _update_row_image_widget(
-        self, image_container, placeholder, pixbuf, error_message
-    ):
-        """Callback passed to ImageHandler to update the UI for a specific row's image."""
-        if not image_container or not image_container.get_realized():
-            return
-        if placeholder and not placeholder.get_realized():
-            placeholder = None
-
-        try:
-            current_child = image_container.get_child()
-            if current_child:
-                image_container.remove(current_child)
-
-            if pixbuf:
-                image = Gtk.Image.new_from_pixbuf(pixbuf)
-                image.set_halign(Gtk.Align.CENTER)
-                image.set_valign(Gtk.Align.CENTER)
-                image_container.add(image)
-                image.show()
-            elif placeholder:
-                placeholder.set_label(error_message or "[Error]")
-                image_container.add(placeholder)
-                placeholder.show()
-        except Exception as e:
-            log.error(f"Error updating row image widget: {e}")
-
-    # --- Status Label, Pin Status, Zoom ---
-    def update_status_label(self):
-        """Updates the status bar text."""
-        count = len(self.filtered_items)
-        total = len(self.items)
-        status_parts = []
-        if self.show_only_pinned:
-            status_parts.append(f"Showing {count} pinned items")
-        elif self.search_term:
-            status_parts.append(f"Found {count} items ({total} total)")
-        else:
-            status_parts.append(f"{total} items")
-
-        status_parts.append("Press ? for help")
-        final_status = " • ".join(status_parts)
-
-        if self.status_label.get_text() != final_status:
-            self.status_label.set_text(final_status)
-
-    def flash_status(self, message, duration=2500):
-        """Temporarily displays a message in the status bar."""
-        current_status = self.status_label.get_text()
-        log.info(f"Status Flash: {message}")
-        self.status_label.set_text(message)
-
-        def revert_status(original_text):
-            if self.status_label.get_text() == message:
-                self.update_status_label()
-            return False
-
-        GLib.timeout_add(duration, partial(revert_status, current_status))
-
-    def update_row_pin_status(self, original_index):
-        """Updates the visual state of a row when its pin status changes."""
-        is_pinned = self.items[original_index].get("pinned", False)
-        for row in self.list_box.get_children():
-            if hasattr(row, "item_index") and row.item_index == original_index:
-                row.item_pinned = is_pinned
-                try:
-                    vbox = row.get_child()
-                    hbox = vbox.get_children()[0]
-                    pin_icon = hbox.get_children()[-1]
-                    if isinstance(pin_icon, Gtk.Image):
-                        pin_icon.set_from_icon_name(
-                            "starred-symbolic" if is_pinned else "non-starred-symbolic",
-                            Gtk.IconSize.BUTTON,
-                        )
-                        pin_icon.set_tooltip_text(
-                            "Pinned" if is_pinned else "Not Pinned"
-                        )
-                except (AttributeError, IndexError, TypeError) as e:
-                    log.warning(
-                        f"Could not update pin icon for row {original_index}: {e}"
-                    )
-
-                context = row.get_style_context()
-                if is_pinned:
-                    context.add_class("pinned-row")
-                else:
-                    context.remove_class("pinned-row")
-                break
-
-    def update_zoom(self):
-        """Applies the current zoom level to the application CSS."""
-        zoom_css = f"* {{ font-size: {round(self.zoom_level * 100)}%; }}".encode()
-        try:
-            if not hasattr(self, "style_provider"):
-                self._apply_css()
-            self.style_provider.load_from_data(APP_CSS.encode() + b"\n" + zoom_css)
-            log.debug(f"Zoom updated to {self.zoom_level:.2f}")
-        except GLib.Error as e:
-            log.error(f"Error loading CSS for zoom: {e}")
-        except Exception as e:
-            log.error(f"Unexpected error updating zoom CSS: {e}")
-
-    # --- Lazy Loading ---
-    def on_vadjustment_changed(self, adjustment):
-        """Callback when the scrollbar position changes."""
-        if self._loading_more:
-            return
-        current_value = adjustment.get_value()
-        upper = adjustment.get_upper()
-        page_size = adjustment.get_page_size()
-        if (
-            upper > page_size
-            and current_value >= (upper - page_size) * LOAD_THRESHOLD_FACTOR
-        ):
-            self.check_load_more()
-
-    def on_list_box_size_allocate(self, list_box, allocation):
-        """Callback when list box size changes, check if viewport needs filling."""
-        GLib.idle_add(self.check_load_more)
-
-    def check_load_more(self):
-        """Checks if more items should be loaded."""
-        if self._loading_more:
-            return False
-        if not self.list_box.get_realized():
-            return False
-
-        current_row_count = len(self.list_box.get_children())
-        total_filtered_count = len(self.filtered_items)
-
-        if current_row_count < total_filtered_count:
-            needs_load = False
-            if self.vadj:
-                upper = self.vadj.get_upper()
-                page_size = self.vadj.get_page_size()
-                # Condition 1: Viewport not full
-                if upper <= page_size + 5:
-                    needs_load = True
-                # Condition 2: Scrolled near bottom
-                elif (
-                    self.vadj.get_value() >= (upper - page_size) * LOAD_THRESHOLD_FACTOR
-                ):
-                    needs_load = True
-
-            if needs_load:
-                self._loading_more = True
-                start_idx = current_row_count
-                end_idx = min(start_idx + LOAD_BATCH_SIZE, total_filtered_count)
-                log.debug(f"Scheduling load more: {start_idx} to {end_idx - 1}")
-                GLib.idle_add(self._do_load_more, start_idx, end_idx)
-                return False
-
-        return False
-
-    def _do_load_more(self, start_idx, end_idx):
-        """Performs the actual row creation for lazy loading."""
-        log.debug(f"Executing load more: {start_idx} to {end_idx - 1}")
-        self._create_rows_range(start_idx, end_idx)
-        self.list_box.show_all()
-        self._loading_more = False
-        GLib.idle_add(self.check_load_more)
-        return False
-
-    # --- Actions  ---
-    def toggle_pin_selected(self):
-        """Toggles the pin status of the currently selected item."""
-        selected_row = self.list_box.get_selected_row()
-        if selected_row and hasattr(selected_row, "item_index"):
-            original_index = selected_row.item_index
-            if 0 <= original_index < len(self.items):
-                item = self.items[original_index]
-                item["pinned"] = not item.get("pinned", False)
-                self.update_row_pin_status(original_index)
-                self.schedule_save_history()
-                self.flash_status("Item pinned" if item["pinned"] else "Item unpinned")
-                if self.show_only_pinned and not item["pinned"]:
-                    self._remove_row_from_view(selected_row)
-            else:
-                self.flash_status("Error: Item index invalid.")
-        else:
-            log.warning("Toggle pin called with no valid row selected.")
-
-    def remove_selected_item(self):
-        """Removes the currently selected item."""
-        selected_row = self.list_box.get_selected_row()
-        if selected_row and hasattr(selected_row, "item_index"):
-            original_index_to_remove = selected_row.item_index
-            if 0 <= original_index_to_remove < len(self.items):
-                item_value_preview = str(
-                    self.items[original_index_to_remove].get("value", "")
-                )[:30]
-                log.info(f"Removing item at original index {original_index_to_remove}")
-                del self.items[original_index_to_remove]
-                self.schedule_save_history()
-                removed_filtered_index = self._remove_row_from_view(selected_row)
-                for fi in self.filtered_items:
-                    if fi["original_index"] > original_index_to_remove:
-                        fi["original_index"] -= 1
-                for row in self.list_box.get_children():
-                    if (
-                        hasattr(row, "item_index")
-                        and row.item_index > original_index_to_remove
-                    ):
-                        row.item_index -= 1
-                self.flash_status(f"Item removed: '{item_value_preview}...'.")
-                self.update_status_label()
-                if removed_filtered_index != -1:
-                    new_count = len(self.list_box.get_children())
-                    if new_count > 0:
-                        select_idx = min(removed_filtered_index, new_count - 1)
-                        self.list_box.select_row(
-                            self.list_box.get_row_at_index(select_idx)
-                        )
-
-            else:
-                self.flash_status("Error: Item index invalid for removal.")
-        else:
-            log.warning("Remove item called with no valid row selected.")
-
-    def _remove_row_from_view(self, row_to_remove):
-        """Helper to remove a row and update filtered list/indices."""
-        removed_filtered_index = -1
-        original_index_removed = getattr(row_to_remove, "item_index", -1)
-        children = self.list_box.get_children()
-        try:
-            removed_filtered_index = children.index(row_to_remove)
-        except ValueError:
-            return -1
-        self.list_box.remove(row_to_remove)
-        self.filtered_items = [
-            fi
-            for fi in self.filtered_items
-            if fi["original_index"] != original_index_removed
-        ]
-        for idx in range(removed_filtered_index, len(self.list_box.get_children())):
-            row = self.list_box.get_row_at_index(idx)
-            if hasattr(row, "filtered_index"):
-                row.filtered_index = idx
-        return removed_filtered_index
-
-    def copy_text_to_clipboard_wl(self, text_value):
-        """Use wl-copy to place text into the clipboard on Wayland."""
-        try:
-            process = subprocess.Popen(
-                ["wl-copy"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-            process.stdin.write(text_value.encode("utf-8"))
-            process.stdin.close()
-
-            self.flash_status("Text copied to clipboard using wl-copy")
-            return True
-        except Exception as e:
-            log.error(f"Error invoking wl-copy: {e}")
-            self.flash_status(f"Error copying text: {str(e)}")
-            return False
-
-    def copy_image_to_clipboard_wl(self, image_path):
-        """Use wl-copy to place an image into the clipboard on Wayland."""
-        try:
-            if not os.path.isfile(image_path):
-                log.error(f"Image file does not exist: {image_path}")
-                self.flash_status("Error: Image file not found")
-                return False
-
-            image_ext = os.path.splitext(image_path)[1].lower()
-            mimetype = f"image/{image_ext.lstrip('.')}"
-            process = subprocess.Popen(
-                ["wl-copy", "-t", mimetype],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-
-            with open(image_path, "rb") as img_file:
-                while chunk := img_file.read(4096):
-                    process.stdin.write(chunk)
-
-            process.stdin.close()
-
-            self.flash_status("Image copied to clipboard using wl-copy")
-            return True
-        except Exception as e:
-            log.error(f"Error copying image with wl-copy: {e}")
-            self.flash_status(f"Error copying image: {str(e)}")
-            return False
-
-    def copy_selected_item_to_clipboard(self):
-        """Copies the selected item to the system clipboard using wl-copy on Wayland,
-        then closes the window after a short delay."""
-        selected_row = self.list_box.get_selected_row()
-        exit_timeout = 100
-        if not selected_row:
-            log.warning("Copy called with no row selected.")
-            return
-
-        for attr in ("item_index", "is_image", "item_value"):
-            if not hasattr(selected_row, attr):
-                log.error(f"Selected row missing expected attribute: {attr}")
-                self.flash_status("Error: Invalid selected item data.")
-                return
-
-        try:
-            original_index = selected_row.item_index
-            if not (0 <= original_index < len(self.items)):
-                self.flash_status("Error: Selected item no longer exists.")
-                return
-
-            item = self.items[original_index]
-
-            def close_window_callback(window):
-                if window and window.get_realized():
-                    window.get_application().quit()
-                return False
-
-            if selected_row.is_image:
-                image_path = item.get("filePath")
-                if image_path and os.path.exists(image_path):
-                    if self.copy_image_to_clipboard_wl(image_path):
-                        # Close window after successful copy
-                        GLib.timeout_add(
-                            exit_timeout, partial(close_window_callback, self.window)
-                        )
-                    else:
-                        self.flash_status("Failed to copy image with wl-copy")
-                else:
-                    self.flash_status("Image path invalid or file missing")
-            else:
-                text_value = selected_row.item_value
-                if text_value:
-                    if self.copy_text_to_clipboard_wl(text_value):
-                        # Close window after successful copy
-                        GLib.timeout_add(
-                            exit_timeout, partial(close_window_callback, self.window)
-                        )
-                    else:
-                        self.flash_status("Failed to copy text with wl-copy")
-                else:
-                    self.flash_status("Cannot copy empty text.")
-        except Exception as e:
-            log.error(f"Unexpected error during copy: {e}")
-            import traceback
-
-            traceback.print_exc()
-            self.flash_status(f"Error copying: {str(e)}")
-
-    def show_item_preview(self):
-        """Shows the preview window for the selected item."""
-        selected_row = self.list_box.get_selected_row()
-        if not selected_row:
-            return
-        try:
-            original_index = selected_row.item_index
-            if not (0 <= original_index < len(self.items)):
-                self.flash_status("Error: Selected item no longer exists.")
-                return
-            item = self.items[original_index]
-            show_preview_window(
-                self.window,
-                item,
-                selected_row.is_image,
-                self.change_preview_text_size,
-                self.reset_preview_text_size,
-                self.on_preview_key_press,
-            )
-        except Exception as e:
-            log.error(f"Error creating preview window: {e}")
-            traceback.print_exc()
-            self.flash_status(f"Error showing preview: {str(e)}")
-
-    # --- Preview Window Callbacks ---
-    def change_preview_text_size(self, text_view, delta):
-        """Callback to change font size in the preview TextView."""
-        try:
-            pango_context = text_view.get_pango_context()
-            font_desc = pango_context.get_font_description() if pango_context else None
-            if not font_desc:
-                return
-
-            if not hasattr(text_view, "base_font_size"):
-                base_size = font_desc.get_size() / Pango.SCALE
-                text_view.base_font_size = base_size if base_size > 0 else 10.0
-
-            current_size_pts = font_desc.get_size() / Pango.SCALE
-            new_size_pts = max(4.0, current_size_pts + delta)
-            font_desc.set_size(int(new_size_pts * Pango.SCALE))
-            text_view.override_font(font_desc)
-        except Exception as e:
-            log.error(f"Error changing preview text size: {e}")
-
-    def reset_preview_text_size(self, text_view):
-        """Callback to reset font size in the preview TextView."""
-        try:
-            if hasattr(text_view, "base_font_size") and text_view.base_font_size > 0:
-                pango_context = text_view.get_pango_context()
-                font_desc = (
-                    pango_context.get_font_description() if pango_context else None
-                )
-                if font_desc:
-                    font_desc.set_size(int(text_view.base_font_size * Pango.SCALE))
-                    text_view.override_font(font_desc)
-                else:
-                    text_view.override_font(None)
-            else:
-                text_view.override_font(None)
-        except Exception as e:
-            log.error(f"Error resetting preview text size: {e}")
-
-    def on_help_window_close(self, window):
-        """Callback for when the help window is closed."""
-        window.destroy()
-        if self.window:
-            self.window.present()
-            self.window.grab_focus()
-
-    def on_preview_key_press(self, preview_window, event):
-        """Handles key presses within the preview window."""
-        keyval = event.keyval
-        ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
-        if keyval == Gdk.KEY_Escape:
-            preview_window.destroy()
-            self.window.present()
-            self.window.grab_focus()
-            return True
-        if keyval == Gdk.KEY_c and ctrl:
-            widget_to_search = preview_window.get_child()
-            textview = None
-            if isinstance(widget_to_search, Gtk.Box):
-                for child in widget_to_search.get_children():
-                    if isinstance(child, Gtk.ScrolledWindow) and isinstance(
-                        child.get_child(), Gtk.TextView
-                    ):
-                        textview = child.get_child()
-                        break
-            if textview:
-                buffer = textview.get_buffer()
-                if buffer.get_has_selection():
-                    buffer.copy_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD))
-                else:
-                    buffer.select_range(buffer.get_start_iter(), buffer.get_end_iter())
-                    buffer.copy_clipboard(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD))
-                    buffer.delete_selection(False, False)
-                self.flash_status("Text copied from preview", duration=1500)
-                return True
-        return False
-
-    # --- Event Handlers ---
-    def on_window_destroy(self, widget):
-        """Cleanup actions when the main window is closed."""
-        log.info("Main window closed.")
-
-    def on_key_press(self, widget, event):
-        """Handles key presses on the main window."""
-        keyval = event.keyval
-        ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
-
-        if self.search_entry.has_focus():
-            if keyval == Gdk.KEY_Escape:
-                if self.search_entry.get_text():
-                    self.search_entry.set_text("")
-                else:
-                    self.window.get_application().quit()
-                return True
-            if keyval in [Gdk.KEY_Up, Gdk.KEY_Down]:
-                if len(self.list_box.get_children()) > 0:
-                    self.list_box.grab_focus()
-                    return False
-            if keyval == Gdk.KEY_Tab:
-                self.pin_filter_button.set_active(
-                    not self.pin_filter_button.get_active()
-                )
-                GLib.idle_add(self._focus_first_item)
-                return True
-            if keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
-                if len(self.list_box.get_children()) > 0:
-                    first_row = self.list_box.get_row_at_index(0)
-                    self.list_box.select_row(first_row)
-                    return self.copy_selected_item_to_clipboard()
-            return False
-
-        # List Box Focus / General Keys
-        self.list_box.get_selected_row()
-        if keyval == Gdk.KEY_k:
-            return self.list_box.emit("move-cursor", Gtk.MovementStep.DISPLAY_LINES, -1)
-        if keyval == Gdk.KEY_j:
-            return self.list_box.emit("move-cursor", Gtk.MovementStep.DISPLAY_LINES, 1)
-        if keyval == Gdk.KEY_Home:
-            if len(self.list_box.get_children()) > 0:
-                self.list_box.select_row(self.list_box.get_row_at_index(0))
-                self.scroll_to_top()
-            return True
-        if keyval == Gdk.KEY_End:
-            last_idx = len(self.list_box.get_children()) - 1
-            if last_idx >= 0:
-                self.list_box.select_row(self.list_box.get_row_at_index(last_idx))
-                self.scroll_to_bottom()
-            return True
-        if keyval == Gdk.KEY_slash:
-            self.search_entry.grab_focus()
-            return True
-        if keyval == Gdk.KEY_space:
-            self.show_item_preview()
-            return True
-        if keyval == Gdk.KEY_p:
-            self.toggle_pin_selected()
-            return True
-        if keyval in [Gdk.KEY_x, Gdk.KEY_Delete]:
-            self.remove_selected_item()
-            return True
-        if keyval == Gdk.KEY_question:
-            show_help_window(self.window, self.on_help_window_close)
-            return True
-        if keyval == Gdk.KEY_Tab:
-            self.pin_filter_button.set_active(not self.pin_filter_button.get_active())
-            return True
-        if keyval == Gdk.KEY_Escape:
-            self.window.get_application().quit()
-            return True
-        if ctrl and keyval in [Gdk.KEY_plus, Gdk.KEY_equal]:
-            self.zoom_level = min(3.0, self.zoom_level * 1.1)
-            self.update_zoom()
-            return True
-        if ctrl and keyval == Gdk.KEY_minus:
-            self.zoom_level = max(0.5, self.zoom_level / 1.1)
-            self.update_zoom()
-            return True
-        if ctrl and keyval == Gdk.KEY_0:
-            self.zoom_level = 1.0
-            self.update_zoom()
-            return True
-        if ctrl and keyval == Gdk.KEY_q:
-            self.window.get_application().quit()
-            return True
-
-        return False
-
-    def on_row_activated(self, list_box, row):
-        """Handles double-click or Enter on a list row."""
-        log.debug(f"Row activated: original_index={getattr(row, 'item_index', 'N/A')}")
-        self.copy_selected_item_to_clipboard()
-
-    def on_search_changed(self, entry):
-        """Handles changes in the search entry, debounced."""
-        self.search_term = entry.get_text()
-        if self._search_timer_id:
-            GLib.source_remove(self._search_timer_id)
-        self._search_timer_id = GLib.timeout_add(
-            SEARCH_DEBOUNCE_MS, self._trigger_filter_update
-        )
-
-    def _trigger_filter_update(self):
-        """Updates filtering after search debounce timeout."""
-        log.debug(f"Triggering filter update for search: '{self.search_term}'")
-        self.update_filtered_items()
-        self._search_timer_id = None
-        return False
-
-    def on_pin_filter_toggled(self, button):
-        """Handles toggling the 'Pinned Only' filter button."""
-        self.show_only_pinned = button.get_active()
-        log.debug(f"Pin filter toggled: {'ON' if self.show_only_pinned else 'OFF'}")
-
-        self.update_filtered_items()
-        self._focus_first_item()
-
-    # --- Scrolling Helpers ---
-    def scroll_to_bottom(self):
-        if not self.vadj:
-            return
-        GLib.idle_add(
-            lambda: self.vadj.set_value(
-                self.vadj.get_upper() - self.vadj.get_page_size()
-            )
-            or False
-        )
-
-    def scroll_to_top(self):
-        if not self.vadj:
-            return
-        GLib.idle_add(lambda: self.vadj.set_value(self.vadj.get_lower()) or False)
 
 
 # --- Gtk.Application Subclass ---
@@ -880,18 +27,81 @@ class ClipseGuiApplication(Gtk.Application):
     def do_startup(self):
         """Called once when the application starts."""
         Gtk.Application.do_startup(self)
-        log.info(f"Application {APPLICATION_ID} starting up.")
+        log.debug(f"Application {APPLICATION_ID} starting up.")
 
     def do_activate(self):
-        """Called when the application is launched (or reactivated)."""
+        """Called when the application is launched. Creates the main window and controller."""
         if not self.window:
-            log.info("Activating application - creating main window.")
+            log.debug("Activating application - creating main window.")
+
+            # Check for config load errors before creating UI
+            if constants.config.load_error_message:
+                log.warning("Displaying configuration error dialog to user.")
+                error_dialog = Gtk.MessageDialog(
+                    transient_for=None,
+                    flags=0,
+                    message_type=Gtk.MessageType.WARNING,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Configuration File Warning",
+                )
+                error_dialog.format_secondary_text(
+                    f"{constants.config.load_error_message}"
+                )
+                error_dialog.run()
+                error_dialog.destroy()
+                constants.config.load_error_message = None  # Clear after showing
+
+            # Create the main application window
             self.window = Gtk.ApplicationWindow(application=self, title=APP_NAME)
             self.window.set_default_size(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+            try:
+                self.window.set_icon_name("edit-copy")
+            except GLib.Error as e:
+                log.warning(f"Could not set window icon name: {e}")
 
-            self.controller = ClipboardHistoryController(self.window)
+            # Create the controller which builds the UI inside the window
+            try:
+                # Instantiate the controller from the new module
+                self.controller = ClipboardHistoryController(self.window)
+            except Exception as e:
+                log.critical(
+                    f"Failed to initialize ClipboardHistoryController: {e}",
+                    exc_info=True,
+                )
+                error_dialog = Gtk.MessageDialog(
+                    transient_for=self.window,
+                    flags=0,
+                    message_type=Gtk.MessageType.ERROR,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Application Initialization Failed",
+                )
+                error_dialog.format_secondary_text(
+                    f"Could not initialize the main application component.\n"
+                    f"Please check logs for details.\n\nError: {e}"
+                )
+                error_dialog.run()
+                error_dialog.destroy()
+                self.quit()
+                return
 
             self.window.show_all()
+            log.debug("Main window created and shown.")
         else:
-            log.info("Application already active - presenting existing window.")
+            log.debug("Application already active - presenting existing window.")
             self.window.present()
+
+    def do_shutdown(self):
+        """Called when the application is shutting down."""
+        log.debug(f"Application {APPLICATION_ID} shutting down.")
+        # Ensure any pending save is triggered before exiting
+        if (
+            self.controller
+            and hasattr(self.controller, "_save_timer_id")
+            and self.controller._save_timer_id
+        ):
+            GLib.source_remove(self.controller._save_timer_id)
+            log.info("Removed pending save timer on shutdown.")
+            if hasattr(self.controller, "_trigger_save"):
+                self.controller._trigger_save()  # Trigger final save
+
+        Gtk.Application.do_shutdown(self)

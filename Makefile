@@ -20,7 +20,7 @@ DESKTOP_DEST_DIR := $(SHARE_DIR)/applications
 TMP_DESKTOP_FILE := /tmp/$(DESKTOP_FILE)
 
 NUITKA_DIST_DIR := $(APP_NAME).dist
-NUITKA_BINARY := $(APP_NAME)
+NUITKA_BINARY := $(APP_NAME).bin
 
 NUITKA_OPTS := \
   --standalone \
@@ -49,8 +49,13 @@ help:
 	@echo "  clean      - Clean build and temp files"
 
 run:
-	@echo "Starting Clipse GUI from source..."
-	$(PYTHON) $(APP_SCRIPT)
+	@echo "Running Clipse GUI..."
+	@$(PYTHON) $(APP_SCRIPT)
+
+watch:
+	@echo "Starting Clipse GUI in watch mode..."
+	watchmedo auto-restart --directory=. --pattern="*.py" --recursive -- \
+		$(PYTHON) $(APP_SCRIPT)
 
 nuitka:
 	@echo "Building standalone app using Nuitka..."

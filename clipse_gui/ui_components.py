@@ -27,6 +27,7 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
     row.filtered_index = filtered_index
     row.item_value = item.get("value", "")
     row.item_pinned = item.get("pinned", False)
+    row.file_path = item.get("filePath", "")
     row.is_image = item.get("filePath") not in [None, "null", ""]
 
     style_context = row.get_style_context()
@@ -82,7 +83,7 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
 
         label = Gtk.Label(label=display_text)
         label.set_line_wrap(True)
-        label.set_line_wrap_mode(Gtk.WrapMode.WORD)
+        label.set_line_wrap_mode(Pango.WrapMode.WORD)
         label.set_xalign(0)
         label.set_max_width_chars(60)
         content_box.pack_start(label, True, True, 0)
@@ -131,7 +132,7 @@ def show_help_window(parent_window, close_cb):
     content_box.pack_start(header, False, False, 10)
 
     mappings = [
-        ("/", "Focus search field"),
+        ("Slash / f", "Focus search field"),
         ("Esc", "Clear search / Close Preview / Close Help / Quit App (main)"),
         ("↑ / k", "Navigate Up"),
         ("↓ / j", "Navigate Down"),
@@ -201,60 +202,63 @@ def show_preview_window(
     if is_image:
         image_path = item.get("filePath")
         if image_path and os.path.exists(image_path):
-            scrolled = Gtk.ScrolledWindow()
-            scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-            scrolled.set_hexpand(True)
-            scrolled.set_vexpand(True)
-        try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file(image_path)
-            image = Gtk.Image.new_from_pixbuf(pixbuf)
-            image.set_halign(Gtk.Align.CENTER)
-            image.set_valign(Gtk.Align.CENTER)
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file(image_path)
+                if pixbuf is None:
+                    raise GLib.Error(
+                        GLib.ErrorDomain.G_FILE,
+                        GLib.ErrorEnum.INVALID_ARGUMENT,
+                    )
 
-            display = parent_window.get_display()
-            # Get GDK window from GTK window
-            gdk_window = parent_window.get_window()
-            monitor = display.get_monitor_at_window(gdk_window) if gdk_window else None
+                image = Gtk.Image.new_from_pixbuf(pixbuf)
+                image.set_halign(Gtk.Align.CENTER)
+                image.set_valign(Gtk.Align.CENTER)
 
-            if monitor:
-                geometry = monitor.get_geometry()
-                max_w = geometry.width * 0.8
-                max_h = geometry.height * 0.8
-            else:
-                max_w = 1200
-                max_h = 800
+                display = parent_window.get_display()
+                # Get GDK window from GTK window
+                gdk_window = parent_window.get_window()
+                monitor = (
+                    display.get_monitor_at_window(gdk_window) if gdk_window else None
+                )
 
-            img_w = pixbuf.get_width()
-            img_h = pixbuf.get_height()
-            aspect = img_w / img_h if img_h > 0 else 1
-            # Calculate scaling while maintaining aspect ratio
-            if img_w > max_w or img_h > max_h:
-                scale = min(max_w / img_w, max_h / img_h)
-                w = int(img_w * scale)
-                h = int(img_h * scale)
-            else:
-                w = img_w
-                h = img_h
+                if monitor:
+                    geometry = monitor.get_geometry()
+                    max_w = geometry.width * 0.8
+                    max_h = geometry.height * 0.8
+                else:
+                    max_w = 1200
+                    max_h = 800
 
-            # Create scaled pixbuf
-            scaled_pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
-            image.set_from_pixbuf(scaled_pixbuf)
+                img_w = pixbuf.get_width()
+                img_h = pixbuf.get_height()
+                # Calculate scaling while maintaining aspect ratio
+                if img_w > max_w or img_h > max_h:
+                    scale = min(max_w / img_w, max_h / img_h)
+                    w = int(img_w * scale)
+                    h = int(img_h * scale)
+                else:
+                    w = img_w
+                    h = img_h
 
-            preview_window.set_default_size(w, h)
-            scrolled = Gtk.ScrolledWindow()
-            scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-            scrolled.add(image)
-            vbox.pack_start(scrolled, True, True, 0)
+                # Create scaled pixbuf
+                scaled_pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+                image.set_from_pixbuf(scaled_pixbuf)
 
-        except GLib.Error as e:
-            label = Gtk.Label(label=f"Error loading image preview:\n{e.message}")
-            label.set_line_wrap(True)
-            label.set_halign(Gtk.Align.CENTER)
-            label.set_valign(Gtk.Align.CENTER)
-            vbox.pack_start(label, True, True, 0)
-            preview_window.set_default_size(
-                DEFAULT_PREVIEW_IMG_WIDTH, DEFAULT_PREVIEW_IMG_HEIGHT
-            )
+                preview_window.set_default_size(w, h)
+                scrolled = Gtk.ScrolledWindow()
+                scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+                scrolled.add(image)
+                vbox.pack_start(scrolled, True, True, 0)
+
+            except GLib.Error as e:
+                label = Gtk.Label(label=f"Error loading image preview:\n{e.message}")
+                label.set_line_wrap(True)
+                label.set_halign(Gtk.Align.CENTER)
+                label.set_valign(Gtk.Align.CENTER)
+                vbox.pack_start(label, True, True, 0)
+                preview_window.set_default_size(
+                    DEFAULT_PREVIEW_IMG_WIDTH, DEFAULT_PREVIEW_IMG_HEIGHT
+                )
     else:  # Text Preview
         text_value = item.get("value", "")
         scrolled_window = Gtk.ScrolledWindow()
@@ -272,10 +276,13 @@ def show_preview_window(
         context.add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
 
         pango_context = preview_text_view.get_pango_context()
-        font_desc = pango_context.get_font_description() if pango_context else None
-        if font_desc:
-            base_font_size = font_desc.get_size() / Pango.SCALE
-            if base_font_size <= 0:
+        if pango_context:
+            font_desc = pango_context.get_font_description()
+            if font_desc:
+                base_font_size = font_desc.get_size() / Pango.SCALE
+                if base_font_size <= 0:
+                    base_font_size = 10
+            else:
                 base_font_size = 10
         else:
             base_font_size = 10
