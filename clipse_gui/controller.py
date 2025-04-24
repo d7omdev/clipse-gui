@@ -7,13 +7,18 @@ from functools import partial
 import mimetypes
 from .constants import (
     APP_CSS,
+    ENTER_TO_PASTE,
     IMAGE_CACHE_MAX_SIZE,
     INITIAL_LOAD_COUNT,
     LOAD_BATCH_SIZE,
     LOAD_THRESHOLD_FACTOR,
     COPY_TOOL_CMD,
+    PASTE_SIMULATION_CMD_WAYLAND,
+    PASTE_SIMULATION_CMD_X11,
+    PASTE_SIMULATION_DELAY_MS,
     SAVE_DEBOUNCE_MS,
     SEARCH_DEBOUNCE_MS,
+    X11_COPY_TOOL_CMD,
 )
 from .data_manager import DataManager
 from .image_handler import ImageHandler
@@ -42,6 +47,8 @@ class ClipboardHistoryController:
         self._save_timer_id = None
         self._search_timer_id = None
         self._vadjustment_handler_id = None
+        self._is_wayland = "wayland" in os.environ.get("XDG_SESSION_TYPE", "").lower()
+        log.info(f"Detected session type: {'Wayland' if self._is_wayland else 'X11'}")
 
         self.data_manager = DataManager(update_callback=self._on_history_updated)
         self.image_handler = ImageHandler(IMAGE_CACHE_MAX_SIZE or 50)
@@ -111,7 +118,7 @@ class ClipboardHistoryController:
 
     def _on_history_updated(self, loaded_items):
         """Callback function called when the file watcher detects a change."""
-        log.info("Received history update signal from DataManager.")
+        log.debug("Received history update signal from DataManager.")
         self.items = loaded_items
         self.update_filtered_items()
 
@@ -582,12 +589,23 @@ class ClipboardHistoryController:
             self.flash_status(f"Error starting paste command: {str(e)}")
             return False
 
+    def _get_copy_command(self):
+        """Gets the appropriate command for copying TO the clipboard."""
+        if self._is_wayland:
+            return str(COPY_TOOL_CMD)
+        else:
+            return str(X11_COPY_TOOL_CMD or COPY_TOOL_CMD)
+
     def copy_text_to_clipboard(self, text_value):
         """Use the configured command to place text into the clipboard."""
+        copy_cmd = self._get_copy_command()
+        if not copy_cmd:
+            self.flash_status("Error: No copy command configured.")
+            return False
         try:
-            cmd_args = shlex.split(str(COPY_TOOL_CMD))
+            cmd_args = shlex.split(copy_cmd)
         except Exception as e:
-            log.error(f"Could not parse PASTE_TOOL_CMD ('{COPY_TOOL_CMD}'): {e}")
+            log.error(f"Could not parse COPY_TOOL_CMD ('{COPY_TOOL_CMD}'): {e}")
             self.flash_status("Error: Invalid copy command in config")
             return False
         try:
@@ -605,15 +623,27 @@ class ClipboardHistoryController:
                 self.flash_status("Error: Unable to write to clipboard")
                 return False
 
-            self.flash_status("Text copied to clipboard using wl-copy")
             return True
+        except subprocess.TimeoutExpired:
+            log.error(f"Copy command timed out: {copy_cmd}")
+            self.flash_status("Error: Copy command timed out")
+            return False
+        except FileNotFoundError:
+            log.error(f"Copy command not found: {cmd_args[0]}")
+            self.flash_status(f"Error: Copy command '{cmd_args[0]}' not found.")
+            return False
         except Exception as e:
             log.error(f"Error copying text to clipboard: {e}")
-            self.flash_status(f"Error copying text: {str(e)}")
+            self.flash_status(f"Error copying text: {str(e)[:100]}")
             return False
 
     def copy_image_to_clipboard(self, image_path):
         """Use the configured command to place an image into the clipboard."""
+        copy_cmd_base = self._get_copy_command()
+        if not copy_cmd_base:
+            self.flash_status("Error: No copy command configured.")
+            return False
+
         try:
             if not os.path.isfile(image_path):
                 log.error(f"Image file does not exist: {image_path}")
@@ -631,48 +661,59 @@ class ClipboardHistoryController:
                 )
 
             try:
-                base_cmd_args = shlex.split(str(COPY_TOOL_CMD))
+                base_cmd_args = shlex.split(copy_cmd_base)
             except Exception as e:
-                log.error(f"Could not parse COPY_TOOL_CMD ('{COPY_TOOL_CMD}'): {e}")
-                self.flash_status("Error: Invalid paste command in config")
-                return False
-
-            cmd_args = base_cmd_args + ["-t", mimetype]
-
-            try:
-                process = subprocess.Popen(
-                    cmd_args,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                log.error(f"Could not parse copy command ('{copy_cmd_base}'): {e}")
+                self.flash_status(
+                    f"Error: Invalid copy command: {copy_cmd_base[:50]}..."
                 )
-                if process.stdin is None:
-                    log.error("Process stdin is None. Cannot write to clipboard.")
-                    self.flash_status("Error: Unable to write to clipboard")
-                    return False
-
-                with open(image_path, "rb") as img_file:
-                    while chunk := img_file.read(4096):
-                        process.stdin.write(chunk)
-
-                process.stdin.close()
-                process.wait()
-
-                if process.returncode != 0:
-                    raise subprocess.SubprocessError(
-                        f"Command failed with return code {process.returncode}"
-                    )
-
-                self.flash_status("Image copied to clipboard using wl-copy")
-                return True
-            except Exception as e:
-                log.error(f"Error copying image to clipboard: {e}")
-                self.flash_status(f"Error copying image: {str(e)}")
                 return False
+
+            cmd_args = base_cmd_args
+            if "wl-copy" in os.path.basename(base_cmd_args[0]):
+                cmd_args = base_cmd_args + ["--type", mimetype]
+
+            with open(image_path, "rb") as img_file:
+                try:
+                    process = subprocess.Popen(
+                        cmd_args,
+                        stdin=img_file,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    stdout_data, stderr_data = process.communicate(timeout=10)
+
+                    if process.returncode != 0:
+                        err_msg = (
+                            stderr_data.decode("utf-8", errors="ignore").strip()
+                            or stdout_data.decode("utf-8", errors="ignore").strip()
+                        )
+                        log.error(
+                            f"Image copy command failed (code {process.returncode}): {err_msg}"
+                        )
+                        self.flash_status(f"Image copy failed: {err_msg[:100]}")
+                        return False
+
+                    # self.flash_status("Image copied to clipboard")
+                    log.info("Image copied successfully.")
+                    return True
+
+                except subprocess.TimeoutExpired:
+                    log.error(f"Image copy command timed out: {cmd_args}")
+                    self.flash_status("Error: Image copy timed out")
+                    return False
+                except FileNotFoundError:
+                    log.error(f"Copy command not found: {cmd_args[0]}")
+                    self.flash_status(f"Error: Copy command '{cmd_args[0]}' not found.")
+                    return False
+                except Exception as e:
+                    log.error(f"Error copying image to clipboard: {e}")
+                    self.flash_status(f"Error copying image: {str(e)[:100]}")
+                    return False
 
         except Exception as e:
             log.error(f"Unexpected error preparing image copy: {e}", exc_info=True)
-            self.flash_status(f"Error copying image: {str(e)}")
+            self.flash_status(f"Error copying image: {str(e)[:100]}")
             return False
 
     def copy_selected_item_to_clipboard(self):
@@ -719,20 +760,113 @@ class ClipboardHistoryController:
                     )
                     self.flash_status("Image path invalid or file missing")
             else:
-                if item_value is not None:
+                text_to_copy = item.get("value")
+                if text_to_copy is not None:
                     copy_successful = self.copy_text_to_clipboard(item_value)
                 else:
-                    log.error(f"Text item {original_index} has None value on row.")
+                    log.error(f"Text item {original_index} has None value in data.")
                     self.flash_status("Cannot copy null text value.")
 
             if copy_successful:
+                if ENTER_TO_PASTE:
+                    log.debug("Hiding window and scheduling paste simulation.")
+                    self.window.hide()
                 GLib.timeout_add(
-                    exit_timeout, partial(close_window_callback, self.window)
+                    PASTE_SIMULATION_DELAY_MS or 150,
+                    self._trigger_paste_simulation_and_quit,
                 )
+            else:
+                GLib.timeout_add(100, self._quit_application)
 
         except Exception as e:
             log.error(f"Unexpected error during copy selection: {e}", exc_info=True)
             self.flash_status(f"Error copying: {str(e)}")
+
+    def _trigger_paste_simulation_and_quit(self):
+        """Called after a delay to run paste simulation and then quit."""
+        log.debug("Attempting paste simulation...")
+        paste_success = self.paste_from_clipboard_simulated()
+        if paste_success:
+            log.info("Paste simulation command successful.")
+        else:
+            log.warning("Paste simulation command failed or skipped.")
+            # Optional: Show the window again if paste fails?
+            # self.window.show()
+            # self.flash_status("Paste failed. Check logs/dependencies (xdotool/wtype).")
+
+        # Quit the application shortly after attempting paste
+        GLib.timeout_add(50, self._quit_application)
+        return False  # Prevent timer from repeating
+
+    def _quit_application(self):
+        """Safely quits the GTK application."""
+        log.info("Quitting application.")
+        app = self.window.get_application()
+        if app:
+            app.quit()
+        return False  # Prevent timer from repeating
+
+    def paste_from_clipboard_simulated(self):
+        """Pastes FROM the clipboard by simulating key presses (Ctrl+V)."""
+        print(self._is_wayland, "Is Wayland")
+        if self._is_wayland:
+            cmd_str = str(PASTE_SIMULATION_CMD_WAYLAND)
+            tool_name = "wtype"
+        else:
+            cmd_str = str(PASTE_SIMULATION_CMD_X11)
+            tool_name = "xdotool"
+
+        if not cmd_str:
+            log.error(
+                f"Paste simulation command not configured for {'Wayland' if self._is_wayland else 'X11'}."
+            )
+            self.flash_status("Error: Paste simulation command not configured.")
+            return False
+
+        try:
+            cmd_args = shlex.split(cmd_str)
+        except Exception as e:
+            log.error(f"Could not parse paste simulation command ('{cmd_str}'): {e}")
+            self.flash_status(f"Error: Invalid Paste command: {cmd_str[:50]}...")
+            return False
+
+        log.debug(f"Executing paste simulation command: {cmd_args}")
+        try:
+            # Use run for simplicity, capture output for errors
+            result = subprocess.run(
+                cmd_args,
+                capture_output=True,
+                text=True,
+                timeout=5,  # Timeout for the simulation command
+                check=False,  # Don't raise exception on non-zero exit code, check manually
+            )
+
+            if result.returncode != 0:
+                error_output = result.stderr.strip() or result.stdout.strip()
+                error_msg = f"Paste simulation ({tool_name}) failed (code {result.returncode}): {error_output}"
+                log.error(error_msg)
+                # Don't flash here, happens after window is hidden
+                # self.flash_status(f"{tool_name} error: {error_output[:100]}")
+                return False
+
+            log.info(f"Paste simulation ({tool_name}) command successful.")
+            return True
+
+        except FileNotFoundError:
+            error_msg = f"Paste simulation command not found: '{cmd_args[0]}'. Is '{tool_name}' installed?"
+            log.error(error_msg)
+            # self.flash_status(error_msg)
+            return False
+        except subprocess.TimeoutExpired:
+            error_msg = f"Paste simulation command timed out: '{cmd_str}'"
+            log.error(error_msg)
+            # self.flash_status(error_msg)
+            return False
+        except Exception as e:
+            error_msg = f"Error running paste simulation command '{cmd_str}': {e}"
+            log.error(error_msg)
+            # self.flash_status(error_msg[:150])
+            return False
 
     def show_item_preview(self):
         """Shows the preview window for the selected item."""
@@ -741,7 +875,9 @@ class ClipboardHistoryController:
             return
 
         original_index = getattr(selected_row, "item_index", -1)
-        is_image = getattr(selected_row, "file_path") not in [None, "null"]
+        # Correctly check if file_path exists and is not None/null string
+        file_path_attr = getattr(selected_row, "file_path", None)
+        is_image = file_path_attr is not None and file_path_attr != "null"
 
         if original_index == -1:
             log.error("Preview called on row with invalid item_index.")

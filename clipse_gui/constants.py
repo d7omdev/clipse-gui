@@ -19,12 +19,13 @@ DEFAULT_SETTINGS = {
         "compact_mode": "False",
         "save_debounce_ms": "300",
         "search_debounce_ms": "250",
+        "paste_simulation_delay_ms": "150",
     },
     "Commands": {
         "copy_tool_cmd": "wl-copy",
         "x11_copy_tool_cmd": "xclip -i -selection clipboard",
-        "paste_tool_cmd": "wl-paste --no-newline",
-        "x11_paste_tool_cmd": "xclip -o -selection clipboard",
+        "paste_simulation_cmd_wayland": "wtype -M ctrl -P v -m ctrl",
+        "paste_simulation_cmd_x11": "xdotool key --clearmodifiers ctrl+v",
     },
     "UI": {
         "default_window_width": "500",
@@ -57,18 +58,55 @@ def _get_config_value(
     value_type: Type[Union[str, int, float, bool]] = str,
 ) -> Union[str, int, float, bool]:
     try:
-        value = get_func(section, key, fallback=default_val)
-
         if value_type is int:
-            return int(value)
+            value = config.getint(section, key, fallback=int(default_val))
         elif value_type is float:
-            return float(value)
+            value = config.getfloat(section, key, fallback=float(default_val))
         elif value_type is bool:
-            return value.lower() in ("true", "1", "t", "y", "yes")
+            default_bool = str(default_val).lower() in ("true", "1", "yes", "on")
+            value = config.getboolean(section, key, fallback=default_bool)
         else:
-            return str(value)
-    except Exception:
-        return default_val
+            value = config.get(section, key, fallback=str(default_val))
+
+        if value is None:
+            return default_val
+        if isinstance(value, value_type):
+            return value
+        else:
+            try:
+                log.warning(
+                    f"Config value [{section}].{key} had unexpected type {type(value)}, attempting conversion to {value_type}."
+                )
+                return value_type(value)
+            except (ValueError, TypeError):
+                log.error(
+                    f"Conversion failed for [{section}].{key}. Using default: {default_val}"
+                )
+                return default_val
+
+    except Exception as e:
+        log.error(
+            f"Error retrieving config [{section}].{key}: {e}. Using default: {default_val}"
+        )
+        if isinstance(default_val, value_type):
+            return default_val
+        else:
+            try:
+                return value_type(default_val)
+            except (ValueError, TypeError):
+                log.critical(f"Bad default value {default_val} for type {value_type}")
+                if value_type is str:
+                    return ""
+                if value_type is int:
+                    return 0
+                if value_type is float:
+                    return 0.0
+                if value_type is bool:
+                    return False
+
+    # Fallback return to ensure all code paths return a value
+    log.critical(f"Unexpected code path in _get_config_value for [{section}].{key}")
+    return default_val
 
 
 CLIPSE_DIR: str = str(
@@ -96,7 +134,7 @@ HISTORY_FILE_PATH: str = os.path.join(CLIPSE_DIR, HISTORY_FILENAME)
 
 ENTER_TO_PASTE: bool = bool(
     _get_config_value(
-        config.get,
+        config.getboolean,
         "General",
         "enter_to_paste",
         DEFAULT_SETTINGS["General"]["enter_to_paste"],
@@ -106,7 +144,7 @@ ENTER_TO_PASTE: bool = bool(
 
 COMPACT_MODE: bool = bool(
     _get_config_value(
-        config.get,
+        config.getboolean,
         "General",
         "compact_mode",
         DEFAULT_SETTINGS["General"]["compact_mode"],
@@ -116,7 +154,7 @@ COMPACT_MODE: bool = bool(
 
 SAVE_DEBOUNCE_MS: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "General",
         "save_debounce_ms",
         DEFAULT_SETTINGS["General"]["save_debounce_ms"],
@@ -126,10 +164,20 @@ SAVE_DEBOUNCE_MS: int = int(
 
 SEARCH_DEBOUNCE_MS: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "General",
         "search_debounce_ms",
         DEFAULT_SETTINGS["General"]["search_debounce_ms"],
+        int,
+    )
+)
+
+PASTE_SIMULATION_DELAY_MS: int = int(
+    _get_config_value(
+        config.getint,
+        "General",
+        "paste_simulation_delay_ms",
+        DEFAULT_SETTINGS["General"]["paste_simulation_delay_ms"],
         int,
     )
 )
@@ -154,119 +202,112 @@ X11_COPY_TOOL_CMD: str = str(
     )
 )
 
-PASTE_TOOL_CMD: str = str(
+# --- Paste Simulation Commands ---
+PASTE_SIMULATION_CMD_WAYLAND: str = str(
     _get_config_value(
         config.get,
         "Commands",
-        "paste_tool_cmd",
-        DEFAULT_SETTINGS["Commands"]["paste_tool_cmd"],
+        "paste_simulation_cmd_wayland",
+        DEFAULT_SETTINGS["Commands"]["paste_simulation_cmd_wayland"],
         str,
     )
 )
 
-X11_PASTE_TOOL_CMD: str = str(
+PASTE_SIMULATION_CMD_X11: str = str(
     _get_config_value(
         config.get,
         "Commands",
-        "x11_paste_tool_cmd",
-        DEFAULT_SETTINGS["Commands"]["x11_paste_tool_cmd"],
+        "paste_simulation_cmd_x11",
+        DEFAULT_SETTINGS["Commands"]["paste_simulation_cmd_x11"],
         str,
     )
 )
 
+# --- UI Settings ---
 DEFAULT_WINDOW_WIDTH: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_window_width",
         DEFAULT_SETTINGS["UI"]["default_window_width"],
         int,
     )
 )
-
 DEFAULT_WINDOW_HEIGHT: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_window_height",
         DEFAULT_SETTINGS["UI"]["default_window_height"],
         int,
     )
 )
-
 DEFAULT_PREVIEW_TEXT_WIDTH: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_preview_text_width",
         DEFAULT_SETTINGS["UI"]["default_preview_text_width"],
         int,
     )
 )
-
 DEFAULT_PREVIEW_TEXT_HEIGHT: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_preview_text_height",
         DEFAULT_SETTINGS["UI"]["default_preview_text_height"],
         int,
     )
 )
-
 DEFAULT_PREVIEW_IMG_WIDTH: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_preview_img_width",
         DEFAULT_SETTINGS["UI"]["default_preview_img_width"],
         int,
     )
 )
-
 DEFAULT_PREVIEW_IMG_HEIGHT: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_preview_img_height",
         DEFAULT_SETTINGS["UI"]["default_preview_img_height"],
         int,
     )
 )
-
 DEFAULT_HELP_WIDTH: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_help_width",
         DEFAULT_SETTINGS["UI"]["default_help_width"],
         int,
     )
 )
-
 DEFAULT_HELP_HEIGHT: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "default_help_height",
         DEFAULT_SETTINGS["UI"]["default_help_height"],
         int,
     )
 )
-
 LIST_ITEM_IMAGE_WIDTH: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "list_item_image_width",
         DEFAULT_SETTINGS["UI"]["list_item_image_width"],
         int,
     )
 )
-
 LIST_ITEM_IMAGE_HEIGHT: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "UI",
         "list_item_image_height",
         DEFAULT_SETTINGS["UI"]["list_item_image_height"],
@@ -274,39 +315,37 @@ LIST_ITEM_IMAGE_HEIGHT: int = int(
     )
 )
 
+# --- Performance Settings ---
 INITIAL_LOAD_COUNT: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "Performance",
         "initial_load_count",
         DEFAULT_SETTINGS["Performance"]["initial_load_count"],
         int,
     )
 )
-
 LOAD_BATCH_SIZE: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "Performance",
         "load_batch_size",
         DEFAULT_SETTINGS["Performance"]["load_batch_size"],
         int,
     )
 )
-
 LOAD_THRESHOLD_FACTOR: float = float(
     _get_config_value(
-        config.get,
+        config.getfloat,
         "Performance",
         "load_threshold_factor",
         DEFAULT_SETTINGS["Performance"]["load_threshold_factor"],
         float,
     )
 )
-
 IMAGE_CACHE_MAX_SIZE: int = int(
     _get_config_value(
-        config.get,
+        config.getint,
         "Performance",
         "image_cache_max_size",
         DEFAULT_SETTINGS["Performance"]["image_cache_max_size"],
@@ -357,4 +396,6 @@ textview {
 log.debug(f"Using configuration directory: {CONFIG_DIR}")
 log.debug(f"Using configuration file: {CONFIG_FILE_PATH}")
 log.debug(f"History file path set to: {HISTORY_FILE_PATH}")
-log.debug(f"Paste command set to: {PASTE_TOOL_CMD}")
+log.debug(f"Paste simulation Wayland: {PASTE_SIMULATION_CMD_WAYLAND}")
+log.debug(f"Paste simulation X11: {PASTE_SIMULATION_CMD_X11}")
+log.debug(f"Paste simulation delay: {PASTE_SIMULATION_DELAY_MS}ms")

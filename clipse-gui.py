@@ -92,7 +92,6 @@ def main():
 
     try:
         Path(constants.CONFIG_DIR).mkdir(parents=True, exist_ok=True)
-        log.info(f"Using config directory: {constants.CONFIG_DIR}")
     except Exception as e:
         log.critical(f"Failed to create config directory: {e}", exc_info=True)
         sys.exit(1)
