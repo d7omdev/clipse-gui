@@ -40,7 +40,7 @@ jobs:
           ```
 
           ### Manual Installation
-          See [installation instructions](https://github.com/d7omdev/clipse-gui#installation) for details.
+          See [installation instructions](https://github.com/yourusername/clipse-gui#installation) for details.
 
           ## 🔄 Changelog
           See below for a full list of changes in this release.
@@ -74,11 +74,6 @@ jobs:
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Install Arch Linux tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y base-devel
-
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
@@ -105,20 +100,15 @@ jobs:
           sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
 
       - name: Setup Arch environment for AUR operations
-        uses: addnab/docker-run-action@v3
+        uses: archlinux/arch-builder-action@master
         with:
-          image: archlinux:latest
-          options: -v ${{ github.workspace }}/aur-repo:/work
-          run: |
+          path: aur-repo
+          command: |
             pacman -Syu --noconfirm
-            pacman -S --noconfirm base-devel git
-            cd /work
-            chown -R 1000:1000 .
-            useradd -m builder
-            echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
-            su - builder -c "cd /work && updpkgsums"
-            su - builder -c "cd /work && makepkg --printsrcinfo > .SRCINFO"
-            ls -la /work
+            pacman -S --noconfirm base-devel
+            updpkgsums
+            makepkg --printsrcinfo > .SRCINFO
+            ls -la
 
       - name: Commit and push AUR update
         run: |

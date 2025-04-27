@@ -21,7 +21,6 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
     original_index = item_info["original_index"]
     item = item_info["item"]
     filtered_index = item_info["filtered_index"]
-
     row = Gtk.ListBoxRow()
     row.item_index = original_index
     row.filtered_index = filtered_index
@@ -29,17 +28,21 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
     row.item_pinned = item.get("pinned", False)
     row.file_path = item.get("filePath", "")
     row.is_image = item.get("filePath") not in [None, "null", ""]
-
     style_context = row.get_style_context()
     if row.item_pinned:
         style_context.add_class("pinned-row")
     style_context.add_class("list-row")
+
+    row.set_size_request(-1, -1)
 
     vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
     vbox.set_margin_top(5)
     vbox.set_margin_bottom(5)
     vbox.set_margin_start(5)
     vbox.set_margin_end(5)
+
+    vbox.set_homogeneous(False)
+    vbox.set_property("expand", False)
 
     hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
     content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -49,7 +52,6 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         image_container = Gtk.Frame()
         image_container.set_size_request(LIST_ITEM_IMAGE_WIDTH, LIST_ITEM_IMAGE_HEIGHT)
         image_container.set_shadow_type(Gtk.ShadowType.NONE)
-
         placeholder = Gtk.Label(label="[Loading image...]")
         placeholder.set_halign(Gtk.Align.CENTER)
         placeholder.set_valign(Gtk.Align.CENTER)
@@ -71,7 +73,7 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         title_label.set_max_width_chars(30)
         title_label.set_halign(Gtk.Align.START)
         content_box.pack_start(title_label, False, False, 0)
-    else:  # Text Item
+    else:
         text_value = item.get("value", "")
         display_text = "\n".join(text_value.splitlines()[:5])
         if len(text_value.splitlines()) > 5 or len(display_text) > 200:
@@ -86,9 +88,16 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         label.set_line_wrap_mode(Pango.WrapMode.WORD)
         label.set_xalign(0)
         label.set_max_width_chars(60)
-        content_box.pack_start(label, True, True, 0)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
 
-    hbox.pack_start(content_box, True, True, 0)
+        label.set_size_request(-1, 40)
+
+        content_box.pack_start(label, False, False, 0)
+
+    # Ensure content box doesn't expand
+    content_box.set_property("expand", False)
+
+    hbox.pack_start(content_box, False, True, 0)
 
     pin_icon = Gtk.Image.new_from_icon_name(
         "starred" if row.item_pinned else "non-starred-symbolic", Gtk.IconSize.MENU
@@ -96,7 +105,7 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
     pin_icon.set_tooltip_text("Pinned" if row.item_pinned else "Not Pinned")
     hbox.pack_end(pin_icon, False, False, 0)
 
-    vbox.pack_start(hbox, True, True, 0)
+    vbox.pack_start(hbox, False, False, 0)
 
     timestamp = format_date(item.get("recorded", ""))
     time_label = Gtk.Label(label=timestamp)

@@ -362,6 +362,8 @@ APP_CSS: str = """
     padding: 8px 12px;
     transition: background-color 0.2s ease;
     border-bottom: 1px solid #161A16;
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 .list-row:selected {
     border-left: 3px solid #4a90e2;

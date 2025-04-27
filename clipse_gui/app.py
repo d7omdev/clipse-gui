@@ -39,7 +39,6 @@ class ClipseGuiApplication(Gtk.Application):
                 log.warning("Displaying configuration error dialog to user.")
                 error_dialog = Gtk.MessageDialog(
                     transient_for=None,
-                    flags=0,
                     message_type=Gtk.MessageType.WARNING,
                     buttons=Gtk.ButtonsType.OK,
                     text="Configuration File Warning",
@@ -49,9 +48,8 @@ class ClipseGuiApplication(Gtk.Application):
                 )
                 error_dialog.run()
                 error_dialog.destroy()
-                constants.config.load_error_message = None  # Clear after showing
+                constants.config.load_error_message = None
 
-            # Create the main application window
             self.window = Gtk.ApplicationWindow(application=self, title=APP_NAME)
             self.window.set_default_size(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
             try:
@@ -59,9 +57,7 @@ class ClipseGuiApplication(Gtk.Application):
             except GLib.Error as e:
                 log.warning(f"Could not set window icon name: {e}")
 
-            # Create the controller which builds the UI inside the window
             try:
-                # Instantiate the controller from the new module
                 self.controller = ClipboardHistoryController(self.window)
             except Exception as e:
                 log.critical(
@@ -70,7 +66,6 @@ class ClipseGuiApplication(Gtk.Application):
                 )
                 error_dialog = Gtk.MessageDialog(
                     transient_for=self.window,
-                    flags=0,
                     message_type=Gtk.MessageType.ERROR,
                     buttons=Gtk.ButtonsType.OK,
                     text="Application Initialization Failed",
@@ -102,6 +97,6 @@ class ClipseGuiApplication(Gtk.Application):
             GLib.source_remove(self.controller._save_timer_id)
             log.info("Removed pending save timer on shutdown.")
             if hasattr(self.controller, "_trigger_save"):
-                self.controller._trigger_save()  # Trigger final save
+                self.controller._trigger_save()
 
         Gtk.Application.do_shutdown(self)

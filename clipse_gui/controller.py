@@ -35,7 +35,7 @@ class ClipboardHistoryController:
     Manages the application logic, state, and interactions for the main window.
     """
 
-    def __init__(self, application_window: Gtk.Application):
+    def __init__(self, application_window: Gtk.ApplicationWindow):
         self.window = application_window
         self.items = []
         self.filtered_items = []
@@ -1022,24 +1022,42 @@ class ClipboardHistoryController:
                 if self.search_entry.get_text():
                     self.search_entry.set_text("")
                 else:
-                    self.window.get_application().quit()
+                    app = self.window.get_application()
+                    if app:
+                        app.quit()
+                    else:
+                        log.warning("Application instance is None. Cannot quit.")
                 return True
+
             if keyval in [Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down]:
                 if len(self.list_box.get_children()) > 0:
                     self.list_box.grab_focus()
-                    return self.list_box.emit("key-press-event", event)
-                return True
-            if keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
-                if len(self.list_box.get_children()) > 0:
-                    first_row = self.list_box.get_row_at_index(0)
-                    if first_row:
-                        self.list_box.select_row(first_row)
-                        self.copy_selected_item_to_clipboard()
+
+                    if keyval == Gdk.KEY_Down:
+                        current = self.list_box.get_selected_row()
+                        if current:
+                            index = current.get_index()
+                            next_row = self.list_box.get_row_at_index(index + 1)
+                            if next_row:
+                                self.list_box.select_row(next_row)
+                        else:
+                            first_row = self.list_box.get_row_at_index(0)
+                            if first_row:
+                                self.list_box.select_row(first_row)
+                    elif keyval == Gdk.KEY_Up:
+                        current = self.list_box.get_selected_row()
+                        if current:
+                            index = current.get_index()
+                            if index > 0:
+                                prev_row = self.list_box.get_row_at_index(index - 1)
+                                if prev_row:
+                                    self.list_box.select_row(prev_row)
+
+                    if keyval in [Gdk.KEY_Up, Gdk.KEY_Down]:
                         return True
-                else:
-                    self.flash_status("No items match search")
-                    return True
-            return False
+
+                    return False
+                return True
 
         selected_row = self.list_box.get_selected_row()
 
@@ -1082,10 +1100,18 @@ class ClipboardHistoryController:
                 self.search_entry.set_text("")
                 self.list_box.grab_focus()
             else:
-                self.window.get_application().quit()
+                app = self.window.get_application()
+                if app:
+                    app.quit()
+                else:
+                    log.warning("Application instance is None. Cannot quit.")
             return True
         if ctrl and keyval == Gdk.KEY_q:
-            self.window.get_application().quit()
+            app = self.window.get_application()
+            if app:
+                app.quit()
+            else:
+                log.warning("Application instance is None. Cannot quit.")
             return True
 
         # Zoom
@@ -1132,8 +1158,6 @@ class ClipboardHistoryController:
         log.debug(f"Triggering filter update for search: '{self.search_term}'")
         self.update_filtered_items()
         self._search_timer_id = None
-        if self.search_term and len(self.list_box.get_children()) > 0:
-            GLib.idle_add(self._focus_first_item)
         return False
 
     def on_pin_filter_toggled(self, button):
