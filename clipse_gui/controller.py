@@ -24,6 +24,7 @@ from .data_manager import DataManager
 from .image_handler import ImageHandler
 from .ui_components import create_list_row_widget, show_help_window, show_preview_window
 from .ui_builder import build_main_window_content
+from .utils import fuzzy_search
 
 from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 
@@ -48,7 +49,7 @@ class ClipboardHistoryController:
         self._search_timer_id = None
         self._vadjustment_handler_id = None
         self._is_wayland = "wayland" in os.environ.get("XDG_SESSION_TYPE", "").lower()
-        log.info(f"Detected session type: {'Wayland' if self._is_wayland else 'X11'}")
+        log.debug(f"Detected session type: {'Wayland' if self._is_wayland else 'X11'}")
 
         self.data_manager = DataManager(update_callback=self._on_history_updated)
         self.image_handler = ImageHandler(IMAGE_CACHE_MAX_SIZE or 50)
@@ -151,24 +152,15 @@ class ClipboardHistoryController:
 
     def update_filtered_items(self):
         """Filters master list based on search and pin status, then updates UI."""
-        self.filtered_items = []
-        search_term_lower = self.search_term.lower()
 
-        for index, item in enumerate(self.items):
-            is_pinned = item.get("pinned", False)
-            if self.show_only_pinned and not is_pinned:
-                continue
-
-            if search_term_lower:
-                item_value = item.get("value", "").lower()
-                match = search_term_lower in item_value
-                if not match and item.get("filePath"):
-                    match = search_term_lower in item.get("filePath", "").lower()
-                if not match:
-                    continue
-
-            self.filtered_items.append({"original_index": index, "item": item})
-
+        self.filtered_items = fuzzy_search(
+            items=self.items,
+            search_term=self.search_term,
+            value_key="value",
+            path_key="filePath",
+            pinned_key="pinned",
+            show_only_pinned=self.show_only_pinned,
+        )
         self.populate_list_view()
         self.update_status_label()
         GLib.idle_add(self.check_load_more)
@@ -716,7 +708,7 @@ class ClipboardHistoryController:
             self.flash_status(f"Error copying image: {str(e)[:100]}")
             return False
 
-    def copy_selected_item_to_clipboard(self):
+    def copy_selected_item_to_clipboard(self, with_paste_simulation=False):
         """Copies the selected item to the system clipboard and closes the window."""
         selected_row = self.list_box.get_selected_row()
         exit_timeout = 150
@@ -768,15 +760,19 @@ class ClipboardHistoryController:
                     self.flash_status("Cannot copy null text value.")
 
             if copy_successful:
-                if ENTER_TO_PASTE:
+                if ENTER_TO_PASTE or with_paste_simulation:
                     log.debug("Hiding window and scheduling paste simulation.")
                     self.window.hide()
-                GLib.timeout_add(
-                    PASTE_SIMULATION_DELAY_MS or 150,
-                    self._trigger_paste_simulation_and_quit,
-                )
+                    GLib.timeout_add(
+                        PASTE_SIMULATION_DELAY_MS or 150,
+                        self._trigger_paste_simulation_and_quit,
+                    )
+                else:
+                    GLib.timeout_add(100, self._quit_application)
             else:
-                GLib.timeout_add(100, self._quit_application)
+                log.error("Copy operation failed.")
+                self.flash_status("Error: Copy operation failed.")
+                GLib.timeout_add(exit_timeout, close_window_callback, self.window)
 
         except Exception as e:
             log.error(f"Unexpected error during copy selection: {e}", exc_info=True)
@@ -808,7 +804,6 @@ class ClipboardHistoryController:
 
     def paste_from_clipboard_simulated(self):
         """Pastes FROM the clipboard by simulating key presses (Ctrl+V)."""
-        print(self._is_wayland, "Is Wayland")
         if self._is_wayland:
             cmd_str = str(PASTE_SIMULATION_CMD_WAYLAND)
             tool_name = "wtype"
@@ -1030,49 +1025,80 @@ class ClipboardHistoryController:
                 return True
 
             if keyval in [Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down]:
-                if len(self.list_box.get_children()) > 0:
-                    self.list_box.grab_focus()
-
-                    if keyval == Gdk.KEY_Down:
-                        current = self.list_box.get_selected_row()
-                        if current:
-                            index = current.get_index()
-                            next_row = self.list_box.get_row_at_index(index + 1)
-                            if next_row:
-                                self.list_box.select_row(next_row)
-                        else:
-                            first_row = self.list_box.get_row_at_index(0)
-                            if first_row:
-                                self.list_box.select_row(first_row)
-                    elif keyval == Gdk.KEY_Up:
-                        current = self.list_box.get_selected_row()
-                        if current:
-                            index = current.get_index()
-                            if index > 0:
-                                prev_row = self.list_box.get_row_at_index(index - 1)
-                                if prev_row:
-                                    self.list_box.select_row(prev_row)
-
-                    if keyval in [Gdk.KEY_Up, Gdk.KEY_Down]:
-                        return True
-
+                focusable_elements = self.list_box.get_children()
+                if not focusable_elements:
                     return False
-                return True
+
+                current_focus = self.window.get_focus()
+                current_index = (
+                    focusable_elements.index(current_focus)
+                    if current_focus in focusable_elements
+                    else -1
+                )
+
+                target_index = current_index
+                if keyval == Gdk.KEY_Down:
+                    target_index = 0 if current_index == -1 else current_index + 1
+                elif keyval == Gdk.KEY_Up:
+                    target_index = (
+                        len(focusable_elements) - 1
+                        if current_index == -1
+                        else current_index - 1
+                    )
+                elif keyval == Gdk.KEY_Page_Down:
+                    target_index = (
+                        0
+                        if current_index == -1
+                        else min(current_index + 5, len(focusable_elements) - 1)
+                    )
+                elif keyval == Gdk.KEY_Page_Up:
+                    target_index = (
+                        len(focusable_elements) - 1
+                        if current_index == -1
+                        else max(current_index - 5, 0)
+                    )
+
+                if 0 <= target_index < len(focusable_elements):
+                    row = focusable_elements[target_index]
+                    self.list_box.select_row(row)
+                    row.grab_focus()
+                    allocation = row.get_allocation()
+                    adj = self.scrolled_window.get_vadjustment()
+                    if adj:
+                        adj.set_value(
+                            min(allocation.y, adj.get_upper() - adj.get_page_size())
+                        )
+                    return True
+
+                return False
 
         selected_row = self.list_box.get_selected_row()
 
+        if keyval == Gdk.KEY_Return:
+            if selected_row:
+                self.on_row_activated(self.list_box, shift and not ENTER_TO_PASTE)
+            elif self.list_box.get_children():
+                first_row = self.list_box.get_row_at_index(0)
+                if first_row:
+                    self.list_box.select_row(first_row)
+                    first_row.grab_focus()
+                    self.on_row_activated(self.list_box)
+            else:
+                self.search_entry.grab_focus()
+            return True
+
         # Navigation Aliases
         if keyval == Gdk.KEY_k:
-            return self.list_box.emit(
-                "move-cursor", Gtk.MovementStep.DISPLAY_LINES, -1, False
-            )
+            return self.list_box.emit("move-cursor", Gtk.MovementStep.DISPLAY_LINES, -1)
         if keyval == Gdk.KEY_j:
-            return self.list_box.emit(
-                "move-cursor", Gtk.MovementStep.DISPLAY_LINES, 1, False
-            )
+            return self.list_box.emit("move-cursor", Gtk.MovementStep.DISPLAY_LINES, 1)
 
         # Actions
-        if keyval == Gdk.KEY_slash or keyval == Gdk.KEY_f:
+        if (
+            keyval == Gdk.KEY_slash
+            or keyval == Gdk.KEY_f
+            and not self.search_entry.has_focus()
+        ):
             self.search_entry.grab_focus()
             self.search_entry.select_region(0, -1)
             return True
@@ -1128,19 +1154,12 @@ class ClipboardHistoryController:
             self.update_zoom()
             return True
 
-        # Enter/Activation (let row-activated signal handle)
-        if keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
-            if selected_row:
-                return False
-            else:
-                return True
-
         return False
 
-    def on_row_activated(self, list_box, row):
+    def on_row_activated(self, row, with_paste_simulation=False):
         """Handles double-click or Enter on a list row."""
         log.debug(f"Row activated: original_index={getattr(row, 'item_index', 'N/A')}")
-        self.copy_selected_item_to_clipboard()
+        self.copy_selected_item_to_clipboard(with_paste_simulation)
 
     def on_search_changed(self, entry):
         """Handles changes in the search entry, debounced."""

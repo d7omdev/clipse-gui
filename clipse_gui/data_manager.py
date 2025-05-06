@@ -158,7 +158,7 @@ class DataManager:
                     changed = True
 
                 if changed:
-                    log.info(
+                    log.debug(
                         f"History file change detected ({self.file_path}). Reloading..."
                     )
                     self._last_mtime = current_mtime

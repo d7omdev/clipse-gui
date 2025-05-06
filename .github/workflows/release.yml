@@ -35,9 +35,7 @@ jobs:
 
           ## 🚀 Installation
           ### Arch Linux
-          ```bash
-          yay -S clipse-gui
-          ```
+          `yay -S clipse-gui`
 
           ### Manual Installation
           See [installation instructions](https://github.com/yourusername/clipse-gui#installation) for details.
@@ -47,7 +45,6 @@ jobs:
           EOF
 
           DESCRIPTION=$(cat release_body.md)
-          # This handles multiline strings correctly in GitHub Actions
           echo "description<<EOF" >> $GITHUB_OUTPUT
           echo "$DESCRIPTION" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -100,15 +97,13 @@ jobs:
           sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
 
       - name: Setup Arch environment for AUR operations
-        uses: archlinux/arch-builder-action@master
-        with:
-          path: aur-repo
-          command: |
-            pacman -Syu --noconfirm
-            pacman -S --noconfirm base-devel
-            updpkgsums
-            makepkg --printsrcinfo > .SRCINFO
-            ls -la
+        run: |
+          sudo pacman -Syu --noconfirm
+          sudo pacman -S --noconfirm base-devel
+          cd aur-repo
+          updpkgsums
+          makepkg --printsrcinfo > .SRCINFO
+          ls -la
 
       - name: Commit and push AUR update
         run: |

@@ -150,6 +150,7 @@ def show_help_window(parent_window, close_cb):
         ("Home", "Go to Top"),
         ("End", "Go to Bottom (of loaded items)"),
         ("Enter", "Copy selected item to clipboard"),
+        ("Shift + Enter", "Copy & Paste selected item in current app"),
         ("Space", "Show full item preview"),
         ("p", "Toggle pin status for selected item"),
         ("x / Del", "Delete selected item"),
