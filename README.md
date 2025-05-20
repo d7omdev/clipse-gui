@@ -8,10 +8,11 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
 
 
 <details>
-<summary>Table of Contents</summary>
+<summary>Compact Mode</summary>
 
-![compact_clipse-gui.png](docs/compact_clipse-gui.png)jkk
-<details>
+![compact_clipse-gui.png](docs/compact_clipse-gui.png)
+
+</details>
 
 ## Table of Contents
 

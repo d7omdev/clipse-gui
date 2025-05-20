@@ -1,4 +1,4 @@
-name: Release & AUR Update
+name: Release
 on:
   push:
     tags:
@@ -24,7 +24,7 @@ jobs:
         run: |
           # Get the previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.ref }}^ 2>/dev/null || echo "")
-          
+
           if [ -z "$PREV_TAG" ]; then
             # If no previous tag, get all commits
             CHANGELOG=$(git log --pretty=format:"- %s" ${{ github.ref }})
@@ -32,10 +32,10 @@ jobs:
             # Get commits between previous tag and current tag
             CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..${{ github.ref }})
           fi
-          
+
           # Clean up the changelog
           CHANGELOG=$(echo "$CHANGELOG" | grep -v "chore:" | grep -v "ci:" | grep -v "docs:")
-          
+
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -45,7 +45,7 @@ jobs:
         run: |
           # Extract installation section from README
           INSTALL_SECTION=$(sed -n '/<h1 id="installation">Installation<\/h1>/,/<\/details>/p' README.md)
-          
+
           cat > release_body.md << EOF
           # 🎉 Clipse GUI v${{ steps.get_version.outputs.version }}
 
@@ -71,8 +71,6 @@ jobs:
           - 💾 Efficient memory usage
           - 🔄 Incremental history loading
           - 🎯 Optimized image handling
-
-          ## Installation
 
           $INSTALL_SECTION
 
