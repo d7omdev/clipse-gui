@@ -19,29 +19,103 @@ jobs:
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.ref }}^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            # If no previous tag, get all commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${{ github.ref }})
+          else
+            # Get commits between previous tag and current tag
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREV_TAG..${{ github.ref }})
+          fi
+          
+          # Clean up the changelog
+          CHANGELOG=$(echo "$CHANGELOG" | grep -v "chore:" | grep -v "ci:" | grep -v "docs:")
+          
+          # Group changes by type
+          FEATURES=$(echo "$CHANGELOG" | grep -i "feat:" | sed 's/feat: //')
+          FIXES=$(echo "$CHANGELOG" | grep -i "fix:" | sed 's/fix: //')
+          IMPROVEMENTS=$(echo "$CHANGELOG" | grep -i "improve:" | sed 's/improve: //')
+          REFACTOR=$(echo "$CHANGELOG" | grep -i "refactor:" | sed 's/refactor: //')
+          
+          # Create formatted changelog
+          cat > changelog.md << EOF
+          ## 🚀 New Features
+          $FEATURES
+          
+          ## 🐛 Bug Fixes
+          $FIXES
+          
+          ## ⚡ Improvements
+          $IMPROVEMENTS
+          
+          ## 🔧 Refactoring
+          $REFACTOR
+          EOF
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Generate release description
         id: release_description
         run: |
+          # Extract installation section from README
+          INSTALL_SECTION=$(sed -n '/<h1 id="installation">Installation<\/h1>/,/<\/details>/p' README.md)
+          
           cat > release_body.md << EOF
-          # Clipse GUI v${{ steps.get_version.outputs.version }}
+          # 🎉 Clipse GUI v${{ steps.get_version.outputs.version }}
 
-          Clipse GUI is a graphical interface for the Clipse clipboard manager.
+          A GTK3 graphical user interface for the excellent [clipse](https://github.com/savedra1/clipse) command-line clipboard manager.
 
-          ## 📋 Key Features
-          - Easily manage clipboard history
-          - Powerful search capabilities
-          - Intuitive user interface
-          - Customizable settings
+          ## ✨ Features
 
-          ## 🚀 Installation
-          ### Arch Linux
-          `yay -S clipse-gui`
+          ### 🎯 Core Functionality
+          - 📋 View text and image entries from clipboard history
+          - 🔍 Fuzzy search with instant results
+          - 📌 Pin important items
+          - 🖼️ Image support with previews
+          - 📋 Copy items back to system clipboard
+          - ⌨️ Keyboard shortcuts for power users
 
-          ### Manual Installation
-          See [installation instructions](https://github.com/yourusername/clipse-gui#installation) for details.
+          ### 🎨 UI/UX
+          - 🎯 Compact mode for minimal footprint
+          - 🔄 Real-time updates
+          - 🎯 Mouse-following window positioning
+          - 📱 Responsive and adaptive layout
 
-          ## 🔄 Changelog
-          See below for a full list of changes in this release.
+          ### ⚡ Performance
+          - 🚀 Lazy loading for better performance
+          - 💾 Efficient memory usage
+          - 🔄 Incremental history loading
+          - 🎯 Optimized image handling
+
+          ## Installation
+
+          $INSTALL_SECTION
+
+          ## 🔧 Configuration
+          Configuration file: \`~/.config/clipse-gui/settings.ini\`
+
+          ### Key Settings
+          - \`compact_mode\`: Enable minimal UI mode
+          - \`enter_to_paste\`: Auto-paste after selection
+          - \`save_debounce_ms\`: Save delay after changes
+          - \`search_debounce_ms\`: Search filter delay
+          - \`paste_simulation_delay_ms\`: Paste delay
+
+          ## 📝 Changelog
+          ${{ steps.changelog.outputs.changelog }}
+
+          ## 🤝 Contributing
+          Contributions are welcome! Please feel free to submit a Pull Request.
+
+          ## 📄 License
+          This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
           EOF
 
           DESCRIPTION=$(cat release_body.md)
