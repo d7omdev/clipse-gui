@@ -242,6 +242,9 @@ DEFAULT_WINDOW_HEIGHT: int = int(
         int,
     )
 )
+if COMPACT_MODE:
+    DEFAULT_WINDOW_WIDTH = 300
+    DEFAULT_WINDOW_HEIGHT = 400
 DEFAULT_PREVIEW_TEXT_WIDTH: int = int(
     _get_config_value(
         config.getint,
@@ -392,6 +395,28 @@ textview {
     padding: 3px 6px;
     border-radius: 4px;
     border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Compact mode styles */
+.compact-mode .list-row {
+    padding: 2px 4px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+}
+.compact-mode .list-row:selected {
+    border-left: 2px solid #4a90e2;
+}
+.compact-mode .timestamp {
+    font-size: 60%;
+    margin-top: 0px;
+}
+.compact-mode .status-label {
+    padding-top: 2px;
+    margin-top: 2px;
+    font-size: 80%;
+}
+.compact-mode .key-shortcut {
+    padding: 1px 3px;
 }
 """
 

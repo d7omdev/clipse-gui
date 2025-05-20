@@ -19,6 +19,9 @@ from .constants import (
     SAVE_DEBOUNCE_MS,
     SEARCH_DEBOUNCE_MS,
     X11_COPY_TOOL_CMD,
+    DEFAULT_WINDOW_WIDTH,
+    DEFAULT_WINDOW_HEIGHT,
+    config,
 )
 from .data_manager import DataManager
 from .image_handler import ImageHandler
@@ -43,6 +46,7 @@ class ClipboardHistoryController:
         self.show_only_pinned = False
         self.zoom_level = 1.0
         self.search_term = ""
+        self.compact_mode = config.getboolean("General", "compact_mode", fallback=False)
 
         self._loading_more = False
         self._save_timer_id = None
@@ -58,10 +62,23 @@ class ClipboardHistoryController:
         self.main_box = ui_elements["main_box"]
         self.search_entry = ui_elements["search_entry"]
         self.pin_filter_button = ui_elements["pin_filter_button"]
+        self.compact_mode_button = ui_elements["compact_mode_button"]
         self.scrolled_window = ui_elements["scrolled_window"]
         self.list_box = ui_elements["list_box"]
         self.status_label = ui_elements["status_label"]
         self.vadj = self.scrolled_window.get_vadjustment()
+
+        # Set initial compact mode button state
+        self.compact_mode_button.set_active(self.compact_mode)
+
+        # Hide search entry if in compact mode after window is realized
+        if self.compact_mode:
+
+            def hide_search_entry():
+                self.search_entry.hide()
+                return False
+
+            GLib.idle_add(hide_search_entry)
 
         self.window.add(self.main_box)
 
@@ -72,6 +89,7 @@ class ClipboardHistoryController:
 
         self._apply_css()
         self.update_zoom()
+        self.update_compact_mode()
 
     def _connect_signals(self):
         """Connects GTK signals to their handler methods."""
@@ -80,7 +98,9 @@ class ClipboardHistoryController:
         self.window.connect("destroy", self.on_window_destroy)
 
         self.search_entry.connect("search-changed", self.on_search_changed)
+        self.search_entry.connect("focus-out-event", self.on_search_focus_out)
         self.pin_filter_button.connect("toggled", self.on_pin_filter_toggled)
+        self.compact_mode_button.connect("toggled", self.on_compact_mode_toggled)
         self.list_box.connect("row-activated", self.on_row_activated)
         self.list_box.connect("size-allocate", self.on_list_box_size_allocate)
 
@@ -1099,6 +1119,7 @@ class ClipboardHistoryController:
             or keyval == Gdk.KEY_f
             and not self.search_entry.has_focus()
         ):
+            self.search_entry.show()
             self.search_entry.grab_focus()
             self.search_entry.select_region(0, -1)
             return True
@@ -1189,6 +1210,33 @@ class ClipboardHistoryController:
             if len(self.list_box.get_children()) > 0:
                 GLib.idle_add(self._focus_first_item)
 
+    def on_compact_mode_toggled(self, button):
+        """Handles compact mode toggle button state changes."""
+        self.compact_mode = button.get_active()
+        self.update_compact_mode()
+        # Save the setting
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "compact_mode", str(self.compact_mode))
+        config._save_config()
+
+    def update_compact_mode(self):
+        """Updates the UI based on compact mode state."""
+        if self.compact_mode:
+            self.main_box.get_style_context().add_class("compact-mode")
+            # Adjust window size for compact mode
+            self.window.resize(
+                int(DEFAULT_WINDOW_WIDTH * 0.9), int(DEFAULT_WINDOW_HEIGHT * 0.9)
+            )
+            # Hide search entry in compact mode
+            self.search_entry.hide()
+        else:
+            self.main_box.get_style_context().remove_class("compact-mode")
+            # Restore default window size
+            self.window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+            # Show search entry in normal mode
+            self.search_entry.show()
+
     # --- Scrolling Helpers ---
 
     def scroll_to_bottom(self):
@@ -1216,3 +1264,9 @@ class ClipboardHistoryController:
             return False
 
         GLib.idle_add(_do_scroll)
+
+    def on_search_focus_out(self, entry, event):
+        """Handles when search entry loses focus."""
+        if self.compact_mode:
+            self.search_entry.hide()
+        return False

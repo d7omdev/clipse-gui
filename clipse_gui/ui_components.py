@@ -33,24 +33,50 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         style_context.add_class("pinned-row")
     style_context.add_class("list-row")
 
-    row.set_size_request(-1, -1)
+    # Get parent window to check compact mode
+    parent_window = row.get_toplevel()
+    is_compact = False
+    if isinstance(parent_window, Gtk.Window):
+        main_box = parent_window.get_child()
+        if main_box:
+            is_compact = "compact-mode" in main_box.get_style_context().list_classes()
 
-    vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
-    vbox.set_margin_top(5)
-    vbox.set_margin_bottom(5)
-    vbox.set_margin_start(5)
-    vbox.set_margin_end(5)
+    # Adjust sizes based on compact mode
+    if is_compact:
+        row.set_size_request(-1, 30)  # Smaller height in compact mode
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        vbox.set_margin_top(1)
+        vbox.set_margin_bottom(1)
+        vbox.set_margin_start(2)
+        vbox.set_margin_end(2)
+    else:
+        row.set_size_request(-1, 35)  # Reduced default height
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        vbox.set_margin_top(2)
+        vbox.set_margin_bottom(2)
+        vbox.set_margin_start(3)
+        vbox.set_margin_end(3)
 
     vbox.set_homogeneous(False)
     vbox.set_property("expand", False)
 
-    hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
     if row.is_image:
         image_path = item.get("filePath")
         image_container = Gtk.Frame()
-        image_container.set_size_request(LIST_ITEM_IMAGE_WIDTH, LIST_ITEM_IMAGE_HEIGHT)
+        # Adjust image size based on compact mode
+        if is_compact:
+            image_container.set_size_request(
+                int(LIST_ITEM_IMAGE_WIDTH * 0.6),
+                int(LIST_ITEM_IMAGE_HEIGHT * 0.6)
+            )
+        else:
+            image_container.set_size_request(
+                int(LIST_ITEM_IMAGE_WIDTH * 0.8),
+                int(LIST_ITEM_IMAGE_HEIGHT * 0.8)
+            )
         image_container.set_shadow_type(Gtk.ShadowType.NONE)
         placeholder = Gtk.Label(label="[Loading image...]")
         placeholder.set_halign(Gtk.Align.CENTER)
@@ -70,14 +96,16 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
 
         title_label = Gtk.Label(label=os.path.basename(item.get("value", "Image")))
         title_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-        title_label.set_max_width_chars(30)
+        title_label.set_max_width_chars(20)  # Reduced from 25
         title_label.set_halign(Gtk.Align.START)
         content_box.pack_start(title_label, False, False, 0)
     else:
         text_value = item.get("value", "")
-        display_text = "\n".join(text_value.splitlines()[:5])
-        if len(text_value.splitlines()) > 5 or len(display_text) > 200:
-            cutoff = 200
+        # Limit to 2 lines in compact mode, 3 lines otherwise
+        max_lines = 2 if is_compact else 3
+        display_text = "\n".join(text_value.splitlines()[:max_lines])
+        if len(text_value.splitlines()) > max_lines or len(display_text) > (100 if is_compact else 150):
+            cutoff = 100 if is_compact else 150
             last_space = display_text[:cutoff].rfind(" ")
             if last_space > cutoff * 0.8:
                 cutoff = last_space
@@ -87,10 +115,14 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         label.set_line_wrap(True)
         label.set_line_wrap_mode(Pango.WrapMode.WORD)
         label.set_xalign(0)
-        label.set_max_width_chars(60)
+        label.set_max_width_chars(35 if is_compact else 50)  # Reduced width in compact mode
         label.set_ellipsize(Pango.EllipsizeMode.END)
 
-        label.set_size_request(-1, 40)
+        # Adjust label size based on compact mode
+        if is_compact:
+            label.set_size_request(-1, 20)  # Reduced height in compact mode
+        else:
+            label.set_size_request(-1, 30)
 
         content_box.pack_start(label, False, False, 0)
 
