@@ -27,38 +27,17 @@ jobs:
           
           if [ -z "$PREV_TAG" ]; then
             # If no previous tag, get all commits
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${{ github.ref }})
+            CHANGELOG=$(git log --pretty=format:"- %s" ${{ github.ref }})
           else
             # Get commits between previous tag and current tag
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREV_TAG..${{ github.ref }})
+            CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..${{ github.ref }})
           fi
           
           # Clean up the changelog
           CHANGELOG=$(echo "$CHANGELOG" | grep -v "chore:" | grep -v "ci:" | grep -v "docs:")
           
-          # Group changes by type
-          FEATURES=$(echo "$CHANGELOG" | grep -i "feat:" | sed 's/feat: //')
-          FIXES=$(echo "$CHANGELOG" | grep -i "fix:" | sed 's/fix: //')
-          IMPROVEMENTS=$(echo "$CHANGELOG" | grep -i "improve:" | sed 's/improve: //')
-          REFACTOR=$(echo "$CHANGELOG" | grep -i "refactor:" | sed 's/refactor: //')
-          
-          # Create formatted changelog
-          cat > changelog.md << EOF
-          ## 🚀 New Features
-          $FEATURES
-          
-          ## 🐛 Bug Fixes
-          $FIXES
-          
-          ## ⚡ Improvements
-          $IMPROVEMENTS
-          
-          ## 🔧 Refactoring
-          $REFACTOR
-          EOF
-          
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat changelog.md >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Generate release description
@@ -85,7 +64,6 @@ jobs:
           ### 🎨 UI/UX
           - 🎯 Compact mode for minimal footprint
           - 🔄 Real-time updates
-          - 🎯 Mouse-following window positioning
           - 📱 Responsive and adaptive layout
 
           ### ⚡ Performance
@@ -100,13 +78,6 @@ jobs:
 
           ## 🔧 Configuration
           Configuration file: \`~/.config/clipse-gui/settings.ini\`
-
-          ### Key Settings
-          - \`compact_mode\`: Enable minimal UI mode
-          - \`enter_to_paste\`: Auto-paste after selection
-          - \`save_debounce_ms\`: Save delay after changes
-          - \`search_debounce_ms\`: Search filter delay
-          - \`paste_simulation_delay_ms\`: Paste delay
 
           ## 📝 Changelog
           ${{ steps.changelog.outputs.changelog }}
@@ -132,56 +103,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
-
-  update-aur:
-    runs-on: ubuntu-latest
-    environment: main
-    needs: release
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Extract version
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Set up Git
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-      - name: Set up SSH
-        env:
-          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$AUR_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -t rsa aur.archlinux.org >> ~/.ssh/known_hosts
-
-      - name: Clone AUR repo
-        run: |
-          git clone ssh://aur@aur.archlinux.org/clipse-gui.git aur-repo
-
-      - name: Update PKGBUILD
-        run: |
-          cd aur-repo
-          git config --global --add safe.directory "$(pwd)"
-          sed -i "s/^pkgver=.*/pkgver=${{ steps.get_version.outputs.version }}/" PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-
-      - name: Setup Arch environment for AUR operations
-        run: |
-          sudo pacman -Syu --noconfirm
-          sudo pacman -S --noconfirm base-devel
-          cd aur-repo
-          updpkgsums
-          makepkg --printsrcinfo > .SRCINFO
-          ls -la
-
-      - name: Commit and push AUR update
-        run: |
-          cd aur-repo
-          git add PKGBUILD .SRCINFO
-          git commit -m "Update to v${{ steps.get_version.outputs.version }}"
-          git push

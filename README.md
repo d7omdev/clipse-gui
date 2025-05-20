@@ -6,6 +6,13 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
 
 ![Clipse GUI Screenshot](docs/screenshot.png)
 
+
+<details>
+<summary>Table of Contents</summary>
+
+![compact_clipse-gui.png](docs/compact_clipse-gui.png)jkk
+<details>
+
 ## Table of Contents
 
 - [Features](#features)
@@ -22,6 +29,7 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
 - **Pinning:** Mark important items as "pinned" to keep them visible or filter by them.
 - **Preview:** View full text content or larger image previews in a separate window.
 - **Copy:** Copy any item from the history back to the system clipboard.
+- **Compact Mode:** Minimal UI mode with reduced padding and hidden search bar until needed.
 - **Paste on Enter (Optional):** Configure the application to automatically simulate a paste (Ctrl+V) into the previously focused application after selecting an item with Enter. Requires helper tools (`wtype` for Wayland, `xdotool` for X11).
 - **Wayland & X11 Support:** Uses configurable external tools for clipboard interaction, supporting both display server protocols.
 - **Lazy Loading:** Loads history items incrementally for better performance with large history files.
@@ -136,7 +144,7 @@ The configuration file uses the standard INI format, divided into sections (`[Se
 | `clipse_dir`                | String  | `~/.config/clipse`       | Path to the directory containing the clipboard history file. `~` is expanded to your home directory.                                                             |
 | `history_filename`          | String  | `clipboard_history.json` | Name of the JSON file containing the clipboard history within `clipse_dir`.                                                                                      |
 | `enter_to_paste`            | Boolean | `False`                  | If `True`, pressing Enter will copy the item _and_ attempt to simulate a paste (e.g., Ctrl+V). Requires `wtype` (Wayland) or `xdotool` (X11).                    |
-| `compact_mode`              | Boolean | `False`                  | _(Currently unused, placeholder for future UI variant)_                                                                                                          |
+| `compact_mode`              | Boolean | `False`                  | If `True`, enables minimal UI mode with reduced padding and hidden search bar until needed.                                                                       |
 | `save_debounce_ms`          | Integer | `300`                    | Delay (in milliseconds) after pinning/deleting an item before the history file is saved to disk.                                                                 |
 | `search_debounce_ms`        | Integer | `250`                    | Delay (in milliseconds) after typing in the search bar before the list is filtered.                                                                              |
 | `paste_simulation_delay_ms` | Integer | `150`                    | Delay (in milliseconds) after hiding the Clipse GUI window before the paste simulation (if enabled) is triggered. Allows focus to return to the previous window. |
