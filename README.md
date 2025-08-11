@@ -29,8 +29,10 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
 - **Search:** Quickly filter history items using a search bar.
 - **Pinning:** Mark important items as "pinned" to keep them visible or filter by them.
 - **Preview:** View full text content or larger image previews in a separate window.
+  - **Format Text:** Pretty-print JSON or clean up text formatting in preview window (Ctrl+B).
+  - **Search in Preview:** Find and highlight text within preview content with match counter and navigation (Ctrl+F).
 - **Copy:** Copy any item from the history back to the system clipboard.
-- **Compact Mode:** Minimal UI mode with reduced padding and hidden search bar until needed.
+- **Compact Mode:** Minimal UI mode with reduced padding, hidden search bar until needed, and denser layout with optimized spacing.
 - **Paste on Enter (Optional):** Configure the application to automatically simulate a paste (Ctrl+V) into the previously focused application after selecting an item with Enter. Requires helper tools (`wtype` for Wayland, `xdotool` for X11).
 - **Wayland & X11 Support:** Uses configurable external tools for clipboard interaction, supporting both display server protocols.
 - **Lazy Loading:** Loads history items incrementally for better performance with large history files.
@@ -114,6 +116,8 @@ yay -S clipse-gui
 - **Search:** Type in the search bar or press `/` or `f` to focus it. Press `Esc` to clear the search.
 - **Copy:** Select an item and press `Enter`.
 - **Preview:** Select an item and press `Space`.
+  - **Format Text in Preview:** Press `Ctrl+B` to pretty-print JSON or clean up text formatting.
+  - **Search in Preview:** Press `Ctrl+F` to open search bar with highlighting and match navigation.
 - **Pin/Unpin:** Select an item and press `p`.
 - **Delete:** Select an item and press `x` or `Delete`.
 - **Filter Pinned:** Press `Tab` to toggle showing only pinned items.

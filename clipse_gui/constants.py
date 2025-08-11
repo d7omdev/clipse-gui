@@ -1,16 +1,20 @@
+"""Simplified constants file."""
+
 import os
-from typing import Type, Union, Literal
+from typing import Literal
 from .config_manager import ConfigManager
 import logging
 
 log = logging.getLogger(__name__)
 
+# Basic app info
 APP_NAME: Literal["Clipse GUI"] = "Clipse GUI"
 APPLICATION_ID: Literal["org.d7om.ClipseGUI"] = "org.d7om.ClipseGUI"
 CONFIG_DIR: str = os.path.expanduser("~/.config/clipse-gui")
 CONFIG_FILENAME: Literal["settings.ini"] = "settings.ini"
 CONFIG_FILE_PATH: str = os.path.join(CONFIG_DIR, CONFIG_FILENAME)
 
+# Default settings
 DEFAULT_SETTINGS = {
     "General": {
         "clipse_dir": "~/.config/clipse",
@@ -47,316 +51,43 @@ DEFAULT_SETTINGS = {
     },
 }
 
+# Initialize config
 config = ConfigManager(CONFIG_FILE_PATH, DEFAULT_SETTINGS)
 
+# Derived constants - using simple fallbacks
+CLIPSE_DIR = os.path.expanduser(config.get("General", "clipse_dir", fallback="~/.config/clipse"))
+HISTORY_FILENAME = config.get("General", "history_filename", fallback="clipboard_history.json")
+HISTORY_FILE_PATH = os.path.join(CLIPSE_DIR, HISTORY_FILENAME)
 
-def _get_config_value(
-    get_func,
-    section: str,
-    key: str,
-    default_val: Union[str, int, float, bool],
-    value_type: Type[Union[str, int, float, bool]] = str,
-) -> Union[str, int, float, bool]:
-    try:
-        if value_type is int:
-            value = config.getint(section, key, fallback=int(default_val))
-        elif value_type is float:
-            value = config.getfloat(section, key, fallback=float(default_val))
-        elif value_type is bool:
-            default_bool = str(default_val).lower() in ("true", "1", "yes", "on")
-            value = config.getboolean(section, key, fallback=default_bool)
-        else:
-            value = config.get(section, key, fallback=str(default_val))
+ENTER_TO_PASTE = config.getboolean("General", "enter_to_paste", fallback=False)
+COMPACT_MODE = config.getboolean("General", "compact_mode", fallback=False)
+SAVE_DEBOUNCE_MS = config.getint("General", "save_debounce_ms", fallback=300)
+SEARCH_DEBOUNCE_MS = config.getint("General", "search_debounce_ms", fallback=250)
+PASTE_SIMULATION_DELAY_MS = config.getint("General", "paste_simulation_delay_ms", fallback=150)
 
-        if value is None:
-            return default_val
-        if isinstance(value, value_type):
-            return value
-        else:
-            try:
-                log.warning(
-                    f"Config value [{section}].{key} had unexpected type {type(value)}, attempting conversion to {value_type}."
-                )
-                return value_type(value)
-            except (ValueError, TypeError):
-                log.error(
-                    f"Conversion failed for [{section}].{key}. Using default: {default_val}"
-                )
-                return default_val
+COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
+X11_COPY_TOOL_CMD = config.get("Commands", "x11_copy_tool_cmd", fallback="xclip -i -selection clipboard")
+PASTE_SIMULATION_CMD_WAYLAND = config.get("Commands", "paste_simulation_cmd_wayland", fallback="wtype -M ctrl -P v -m ctrl")
+PASTE_SIMULATION_CMD_X11 = config.get("Commands", "paste_simulation_cmd_x11", fallback="xdotool key --clearmodifiers ctrl+v")
 
-    except Exception as e:
-        log.error(
-            f"Error retrieving config [{section}].{key}: {e}. Using default: {default_val}"
-        )
-        if isinstance(default_val, value_type):
-            return default_val
-        else:
-            try:
-                return value_type(default_val)
-            except (ValueError, TypeError):
-                log.critical(f"Bad default value {default_val} for type {value_type}")
-                if value_type is str:
-                    return ""
-                if value_type is int:
-                    return 0
-                if value_type is float:
-                    return 0.0
-                if value_type is bool:
-                    return False
+DEFAULT_WINDOW_WIDTH = config.getint("UI", "default_window_width", fallback=500)
+DEFAULT_WINDOW_HEIGHT = config.getint("UI", "default_window_height", fallback=700)
+DEFAULT_PREVIEW_TEXT_WIDTH = config.getint("UI", "default_preview_text_width", fallback=700)
+DEFAULT_PREVIEW_TEXT_HEIGHT = config.getint("UI", "default_preview_text_height", fallback=550)
+DEFAULT_PREVIEW_IMG_WIDTH = config.getint("UI", "default_preview_img_width", fallback=400)
+DEFAULT_PREVIEW_IMG_HEIGHT = config.getint("UI", "default_preview_img_height", fallback=200)
+DEFAULT_HELP_WIDTH = config.getint("UI", "default_help_width", fallback=450)
+DEFAULT_HELP_HEIGHT = config.getint("UI", "default_help_height", fallback=550)
+LIST_ITEM_IMAGE_WIDTH = config.getint("UI", "list_item_image_width", fallback=200)
+LIST_ITEM_IMAGE_HEIGHT = config.getint("UI", "list_item_image_height", fallback=100)
 
-    # Fallback return to ensure all code paths return a value
-    log.critical(f"Unexpected code path in _get_config_value for [{section}].{key}")
-    return default_val
+INITIAL_LOAD_COUNT = config.getint("Performance", "initial_load_count", fallback=30)
+LOAD_BATCH_SIZE = config.getint("Performance", "load_batch_size", fallback=20)
+LOAD_THRESHOLD_FACTOR = config.getfloat("Performance", "load_threshold_factor", fallback=0.95)
+IMAGE_CACHE_MAX_SIZE = config.getint("Performance", "image_cache_max_size", fallback=50)
 
-
-CLIPSE_DIR: str = str(
-    _get_config_value(
-        config.get,
-        "General",
-        "clipse_dir",
-        DEFAULT_SETTINGS["General"]["clipse_dir"],
-        str,
-    )
-)
-CLIPSE_DIR = os.path.expanduser(CLIPSE_DIR)
-
-HISTORY_FILENAME: str = str(
-    _get_config_value(
-        config.get,
-        "General",
-        "history_filename",
-        DEFAULT_SETTINGS["General"]["history_filename"],
-        str,
-    )
-)
-
-HISTORY_FILE_PATH: str = os.path.join(CLIPSE_DIR, HISTORY_FILENAME)
-
-ENTER_TO_PASTE: bool = bool(
-    _get_config_value(
-        config.getboolean,
-        "General",
-        "enter_to_paste",
-        DEFAULT_SETTINGS["General"]["enter_to_paste"],
-        bool,
-    )
-)
-
-COMPACT_MODE: bool = bool(
-    _get_config_value(
-        config.getboolean,
-        "General",
-        "compact_mode",
-        DEFAULT_SETTINGS["General"]["compact_mode"],
-        bool,
-    )
-)
-
-SAVE_DEBOUNCE_MS: int = int(
-    _get_config_value(
-        config.getint,
-        "General",
-        "save_debounce_ms",
-        DEFAULT_SETTINGS["General"]["save_debounce_ms"],
-        int,
-    )
-)
-
-SEARCH_DEBOUNCE_MS: int = int(
-    _get_config_value(
-        config.getint,
-        "General",
-        "search_debounce_ms",
-        DEFAULT_SETTINGS["General"]["search_debounce_ms"],
-        int,
-    )
-)
-
-PASTE_SIMULATION_DELAY_MS: int = int(
-    _get_config_value(
-        config.getint,
-        "General",
-        "paste_simulation_delay_ms",
-        DEFAULT_SETTINGS["General"]["paste_simulation_delay_ms"],
-        int,
-    )
-)
-
-COPY_TOOL_CMD: str = str(
-    _get_config_value(
-        config.get,
-        "Commands",
-        "copy_tool_cmd",
-        DEFAULT_SETTINGS["Commands"]["copy_tool_cmd"],
-        str,
-    )
-)
-
-X11_COPY_TOOL_CMD: str = str(
-    _get_config_value(
-        config.get,
-        "Commands",
-        "x11_copy_tool_cmd",
-        DEFAULT_SETTINGS["Commands"]["x11_copy_tool_cmd"],
-        str,
-    )
-)
-
-# --- Paste Simulation Commands ---
-PASTE_SIMULATION_CMD_WAYLAND: str = str(
-    _get_config_value(
-        config.get,
-        "Commands",
-        "paste_simulation_cmd_wayland",
-        DEFAULT_SETTINGS["Commands"]["paste_simulation_cmd_wayland"],
-        str,
-    )
-)
-
-PASTE_SIMULATION_CMD_X11: str = str(
-    _get_config_value(
-        config.get,
-        "Commands",
-        "paste_simulation_cmd_x11",
-        DEFAULT_SETTINGS["Commands"]["paste_simulation_cmd_x11"],
-        str,
-    )
-)
-
-# --- UI Settings ---
-DEFAULT_WINDOW_WIDTH: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_window_width",
-        DEFAULT_SETTINGS["UI"]["default_window_width"],
-        int,
-    )
-)
-DEFAULT_WINDOW_HEIGHT: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_window_height",
-        DEFAULT_SETTINGS["UI"]["default_window_height"],
-        int,
-    )
-)
-if COMPACT_MODE:
-    DEFAULT_WINDOW_WIDTH = 300
-    DEFAULT_WINDOW_HEIGHT = 400
-DEFAULT_PREVIEW_TEXT_WIDTH: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_preview_text_width",
-        DEFAULT_SETTINGS["UI"]["default_preview_text_width"],
-        int,
-    )
-)
-DEFAULT_PREVIEW_TEXT_HEIGHT: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_preview_text_height",
-        DEFAULT_SETTINGS["UI"]["default_preview_text_height"],
-        int,
-    )
-)
-DEFAULT_PREVIEW_IMG_WIDTH: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_preview_img_width",
-        DEFAULT_SETTINGS["UI"]["default_preview_img_width"],
-        int,
-    )
-)
-DEFAULT_PREVIEW_IMG_HEIGHT: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_preview_img_height",
-        DEFAULT_SETTINGS["UI"]["default_preview_img_height"],
-        int,
-    )
-)
-DEFAULT_HELP_WIDTH: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_help_width",
-        DEFAULT_SETTINGS["UI"]["default_help_width"],
-        int,
-    )
-)
-DEFAULT_HELP_HEIGHT: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "default_help_height",
-        DEFAULT_SETTINGS["UI"]["default_help_height"],
-        int,
-    )
-)
-LIST_ITEM_IMAGE_WIDTH: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "list_item_image_width",
-        DEFAULT_SETTINGS["UI"]["list_item_image_width"],
-        int,
-    )
-)
-LIST_ITEM_IMAGE_HEIGHT: int = int(
-    _get_config_value(
-        config.getint,
-        "UI",
-        "list_item_image_height",
-        DEFAULT_SETTINGS["UI"]["list_item_image_height"],
-        int,
-    )
-)
-
-# --- Performance Settings ---
-INITIAL_LOAD_COUNT: int = int(
-    _get_config_value(
-        config.getint,
-        "Performance",
-        "initial_load_count",
-        DEFAULT_SETTINGS["Performance"]["initial_load_count"],
-        int,
-    )
-)
-LOAD_BATCH_SIZE: int = int(
-    _get_config_value(
-        config.getint,
-        "Performance",
-        "load_batch_size",
-        DEFAULT_SETTINGS["Performance"]["load_batch_size"],
-        int,
-    )
-)
-LOAD_THRESHOLD_FACTOR: float = float(
-    _get_config_value(
-        config.getfloat,
-        "Performance",
-        "load_threshold_factor",
-        DEFAULT_SETTINGS["Performance"]["load_threshold_factor"],
-        float,
-    )
-)
-IMAGE_CACHE_MAX_SIZE: int = int(
-    _get_config_value(
-        config.getint,
-        "Performance",
-        "image_cache_max_size",
-        DEFAULT_SETTINGS["Performance"]["image_cache_max_size"],
-        int,
-    )
-)
-
-APP_CSS: str = """
+# CSS Styles
+APP_CSS = """
 .pinned-row {
     border-left: 3px solid #ffcc00;
     font-weight: 500;
@@ -378,45 +109,56 @@ APP_CSS: str = """
     font-style: italic;
     margin-top: 3px;
 }
-.status-label {
-    border-top: 1px solid #ccc;
-    padding-top: 5px;
-    margin-top: 5px;
-    color: #888a85;
-    font-style: italic;
+.content-preview {
+    font-size: 90%;
+    color: #d3d7cf;
+    margin-top: 2px;
 }
-textview {
-     font-family: Monospace;
+.status-bar {
+    padding: 4px 8px;
+    background-color: #2e3436;
+    border-top: 2px solid #555753;
+    font-size: 85%;
+    color: #888a85;
+}
+.search-entry {
+    margin: 8px;
+    border-radius: 6px;
+}
+.help-window {
+    background-color: #2e3436;
+    color: #d3d7cf;
 }
 .key-shortcut {
-    font-family: Monospace;
+    font-family: monospace;
     font-weight: bold;
-    background-color: rgba(0,0,0,0.08);
-    padding: 3px 6px;
-    border-radius: 4px;
-    border: 1px solid rgba(0,0,0,0.1);
+    color: #4a90e2;
+    padding: 2px 6px;
+    background-color: alpha(#4a90e2, 0.1);
+    border-radius: 3px;
+    border: 1px solid alpha(#4a90e2, 0.3);
 }
-
-/* Compact mode styles */
+.preview-window {
+    background-color: #2e3436;
+    color: #d3d7cf;
+}
+.preview-textview {
+    font-family: monospace;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    padding: 8px;
+}
 .compact-mode .list-row {
     padding: 2px 4px;
-    margin-top: 3px;
-    margin-bottom: 3px;
-}
-.compact-mode .list-row:selected {
-    border-left: 2px solid #4a90e2;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    font-size: 1.0em;
 }
 .compact-mode .timestamp {
-    font-size: 60%;
-    margin-top: 0px;
+    font-size: 0.95em;
 }
-.compact-mode .status-label {
-    padding-top: 2px;
-    margin-top: 2px;
-    font-size: 80%;
-}
-.compact-mode .key-shortcut {
-    padding: 1px 3px;
+.compact-mode .content-preview {
+    font-size: 1.0em;
 }
 """
 

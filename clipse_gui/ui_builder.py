@@ -25,11 +25,11 @@ def build_main_window_content() -> dict:
     """
     log.debug("Building main window UI content.")
     main_box = Gtk.Box(
-        orientation=Gtk.Orientation.VERTICAL, spacing=5 if not COMPACT_MODE else 2
+        orientation=Gtk.Orientation.VERTICAL, spacing=5 if not COMPACT_MODE else 1
     )
 
     # Set margins based on compact mode
-    margin = 2 if COMPACT_MODE else 10
+    margin = 1 if COMPACT_MODE else 10
     main_box.set_margin_top(margin)
     main_box.set_margin_bottom(margin)
     main_box.set_margin_start(margin)
@@ -37,7 +37,7 @@ def build_main_window_content() -> dict:
 
     # --- Header ---
     header_box = Gtk.Box(
-        orientation=Gtk.Orientation.HORIZONTAL, spacing=5 if not COMPACT_MODE else 2
+        orientation=Gtk.Orientation.HORIZONTAL, spacing=5 if not COMPACT_MODE else 1
     )
     search_entry = Gtk.SearchEntry(placeholder_text="Search...")
     header_box.pack_start(search_entry, True, True, 0)

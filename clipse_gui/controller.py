@@ -135,7 +135,7 @@ class ClipboardHistoryController:
         else:
             log.debug("CSS provider already exists.")
 
-    # --- Data Loading and Sync ---
+
 
     def _on_history_updated(self, loaded_items):
         """Callback function called when the file watcher detects a change."""
@@ -168,7 +168,7 @@ class ClipboardHistoryController:
                 first_row.grab_focus()
         return False
 
-    # --- Data Filtering and Saving ---
+
 
     def update_filtered_items(self):
         """Filters master list based on search and pin status, then updates UI."""
@@ -204,7 +204,7 @@ class ClipboardHistoryController:
         """Callback for DataManager save errors."""
         self.flash_status(error_message)
 
-    # --- UI Population and Updates ---
+
 
     def populate_list_view(self):
         """Clears and populates the list view with the initial batch of filtered items."""
@@ -246,7 +246,7 @@ class ClipboardHistoryController:
                 item_info = self.filtered_items[i]
                 item_info["filtered_index"] = i
                 row = create_list_row_widget(
-                    item_info, self.image_handler, self._update_row_image_widget
+                    item_info, self.image_handler, self._update_row_image_widget, self.compact_mode
                 )
                 if row:
                     row.item_index = item_info["original_index"]
@@ -369,7 +369,7 @@ class ClipboardHistoryController:
         except Exception as e:
             log.error(f"Unexpected error updating zoom CSS: {e}")
 
-    # --- Lazy Loading ---
+
 
     def on_vadjustment_changed(self, adjustment):
         """Callback when the scrollbar position changes, triggers lazy load if needed."""
@@ -432,7 +432,7 @@ class ClipboardHistoryController:
         GLib.idle_add(self.check_load_more)
         return False
 
-    # --- Actions ---
+
 
     def toggle_pin_selected(self):
         """Toggles the pin status of the currently selected item."""
@@ -1260,9 +1260,9 @@ class ClipboardHistoryController:
         """Updates the UI based on compact mode state."""
         if self.compact_mode:
             self.main_box.get_style_context().add_class("compact-mode")
-            # Adjust window size for compact mode
+            # Adjust window size for compact mode - make it much smaller
             self.window.resize(
-                int(DEFAULT_WINDOW_WIDTH * 0.9), int(DEFAULT_WINDOW_HEIGHT * 0.9)
+                int(DEFAULT_WINDOW_WIDTH * 0.6), int(DEFAULT_WINDOW_HEIGHT * 0.6)
             )
             # Hide search entry in compact mode
             self.search_entry.hide()
@@ -1272,6 +1272,9 @@ class ClipboardHistoryController:
             self.window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
             # Show search entry in normal mode
             self.search_entry.show()
+        
+        # Repopulate the list to apply compact mode to existing rows
+        self.populate_list_view()
 
     # --- Scrolling Helpers ---
 
