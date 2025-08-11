@@ -1,4 +1,6 @@
 import os
+import json
+import re
 from gi.repository import Gtk, Gdk, Pango, GdkPixbuf, GLib
 
 from .utils import format_date
@@ -69,13 +71,11 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         # Adjust image size based on compact mode
         if is_compact:
             image_container.set_size_request(
-                int(LIST_ITEM_IMAGE_WIDTH * 0.6),
-                int(LIST_ITEM_IMAGE_HEIGHT * 0.6)
+                int(LIST_ITEM_IMAGE_WIDTH * 0.6), int(LIST_ITEM_IMAGE_HEIGHT * 0.6)
             )
         else:
             image_container.set_size_request(
-                int(LIST_ITEM_IMAGE_WIDTH * 0.8),
-                int(LIST_ITEM_IMAGE_HEIGHT * 0.8)
+                int(LIST_ITEM_IMAGE_WIDTH * 0.8), int(LIST_ITEM_IMAGE_HEIGHT * 0.8)
             )
         image_container.set_shadow_type(Gtk.ShadowType.NONE)
         placeholder = Gtk.Label(label="[Loading image...]")
@@ -104,7 +104,9 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         # Limit to 2 lines in compact mode, 3 lines otherwise
         max_lines = 2 if is_compact else 3
         display_text = "\n".join(text_value.splitlines()[:max_lines])
-        if len(text_value.splitlines()) > max_lines or len(display_text) > (100 if is_compact else 150):
+        if len(text_value.splitlines()) > max_lines or len(display_text) > (
+            100 if is_compact else 150
+        ):
             cutoff = 100 if is_compact else 150
             last_space = display_text[:cutoff].rfind(" ")
             if last_space > cutoff * 0.8:
@@ -115,7 +117,9 @@ def create_list_row_widget(item_info, image_handler, update_image_callback):
         label.set_line_wrap(True)
         label.set_line_wrap_mode(Pango.WrapMode.WORD)
         label.set_xalign(0)
-        label.set_max_width_chars(35 if is_compact else 50)  # Reduced width in compact mode
+        label.set_max_width_chars(
+            35 if is_compact else 50
+        )  # Reduced width in compact mode
         label.set_ellipsize(Pango.EllipsizeMode.END)
 
         # Adjust label size based on compact mode
@@ -192,6 +196,11 @@ def show_help_window(parent_window, close_cb):
         ("Ctrl 0", "Reset Zoom main list"),
         ("?", "Show this help window"),
         ("Ctrl+Q", "Quit application"),
+        ("", ""),
+        ("Preview Window:", ""),
+        ("Ctrl+F", "Find text in preview"),
+        ("Ctrl+B", "Format text (pretty-print JSON)"),
+        ("Ctrl+C", "Copy text from preview"),
     ]
 
     grid = Gtk.Grid()
@@ -335,6 +344,37 @@ def show_preview_window(
 
         action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
         action_box.set_halign(Gtk.Align.CENTER)
+
+        # Format button
+        format_btn = Gtk.Button.new_from_icon_name(
+            "format-text-bold-symbolic", Gtk.IconSize.BUTTON
+        )
+        format_btn.set_tooltip_text("Format text (pretty-print JSON) - Ctrl+B")
+        format_btn.connect("clicked", lambda b: _format_text_content(preview_text_view))
+
+        # Find button
+        find_btn = Gtk.Button.new_from_icon_name(
+            "edit-find-symbolic", Gtk.IconSize.BUTTON
+        )
+        find_btn.set_tooltip_text("Find text (Ctrl+F)")
+
+        # Create search bar (initially hidden)
+        search_bar = Gtk.SearchBar()
+        search_entry = Gtk.SearchEntry()
+        search_entry.set_placeholder_text("Search text...")
+        search_bar.add(search_entry)
+        search_bar.connect_entry(search_entry)
+
+        # Insert search bar after scrolled window
+        vbox.pack_start(search_bar, False, False, 0)
+        vbox.reorder_child(search_bar, 1)  # Place after scrolled window
+
+        find_btn.connect(
+            "clicked",
+            lambda b: _toggle_search_bar(search_bar, search_entry, preview_text_view),
+        )
+
+        # Zoom controls
         zoom_out = Gtk.Button.new_from_icon_name(
             "zoom-out-symbolic", Gtk.IconSize.BUTTON
         )
@@ -347,6 +387,12 @@ def show_preview_window(
             "zoom-original-symbolic", Gtk.IconSize.BUTTON
         )
         zoom_reset.connect("clicked", lambda b: reset_text_size_cb(preview_text_view))
+
+        action_box.pack_start(format_btn, False, False, 0)
+        action_box.pack_start(find_btn, False, False, 0)
+        action_box.pack_start(
+            Gtk.Separator(orientation=Gtk.Orientation.VERTICAL), False, False, 5
+        )
         action_box.pack_start(Gtk.Label(label="Zoom:"), False, False, 0)
         action_box.pack_start(zoom_out, False, False, 0)
         action_box.pack_start(zoom_reset, False, False, 0)
@@ -359,3 +405,190 @@ def show_preview_window(
 
     preview_window.add(vbox)
     preview_window.show_all()
+
+
+def _format_text_content(text_view):
+    """Formats the text content in the TextView, with special handling for JSON."""
+    buffer = text_view.get_buffer()
+    start, end = buffer.get_bounds()
+    text = buffer.get_text(start, end, False)
+
+    if not text.strip():
+        return
+
+    formatted_text = None
+
+    # Try to format as JSON first
+    try:
+        # Remove any leading/trailing whitespace and check if it looks like JSON
+        stripped_text = text.strip()
+        if (stripped_text.startswith("{") and stripped_text.endswith("}")) or (
+            stripped_text.startswith("[") and stripped_text.endswith("]")
+        ):
+            # Try to parse and format as JSON
+            parsed_json = json.loads(stripped_text)
+            formatted_text = json.dumps(
+                parsed_json, indent=2, ensure_ascii=False, sort_keys=True
+            )
+    except (json.JSONDecodeError, ValueError):
+        # Not valid JSON, try other formatting
+        pass
+
+    # If not JSON, try to format as other structured text
+    if formatted_text is None:
+        # Basic text formatting - normalize whitespace and line breaks
+        lines = text.split("\n")
+        formatted_lines = []
+
+        for line in lines:
+            # Remove excessive whitespace but preserve intentional indentation
+            stripped = line.rstrip()
+            if stripped:
+                # Preserve leading whitespace for indentation
+                leading_spaces = len(line) - len(line.lstrip())
+                formatted_lines.append(" " * leading_spaces + stripped)
+            else:
+                formatted_lines.append("")
+
+        # Remove excessive blank lines (more than 2 consecutive)
+        result_lines = []
+        blank_count = 0
+        for line in formatted_lines:
+            if line.strip() == "":
+                blank_count += 1
+                if blank_count <= 2:
+                    result_lines.append(line)
+            else:
+                blank_count = 0
+                result_lines.append(line)
+
+        formatted_text = "\n".join(result_lines)
+
+    # Update the buffer with formatted text
+    if formatted_text and formatted_text != text:
+        buffer.set_text(formatted_text)
+        # Show a brief status message
+        GLib.timeout_add(100, lambda: _flash_format_status(text_view, "Text formatted"))
+    else:
+        GLib.timeout_add(
+            100, lambda: _flash_format_status(text_view, "No formatting applied")
+        )
+
+
+def _flash_format_status(text_view, message):
+    """Shows a brief status message by temporarily changing the tooltip."""
+    original_tooltip = text_view.get_tooltip_text()
+    text_view.set_tooltip_text(message)
+
+    def restore_tooltip():
+        text_view.set_tooltip_text(original_tooltip)
+        return False
+
+    GLib.timeout_add(2000, restore_tooltip)
+    return False
+
+
+def _toggle_search_bar(search_bar, search_entry, text_view):
+    """Toggles the search bar visibility and handles search functionality."""
+    if search_bar.get_search_mode():
+        # Hide search bar and clear highlights
+        search_bar.set_search_mode(False)
+        buffer = text_view.get_buffer()
+        start, end = buffer.get_bounds()
+        buffer.remove_all_tags(start, end)
+    else:
+        # Show search bar and focus entry
+        search_bar.set_search_mode(True)
+        search_entry.grab_focus()
+
+        # Set up search functionality if not already done
+        if not hasattr(search_entry, "_search_setup"):
+            search_entry._search_setup = True
+            search_entry._search_state = {
+                "last_search": "",
+                "matches": [],
+                "current_index": 0,
+            }
+
+            def perform_search():
+                search_text = search_entry.get_text()
+                buffer = text_view.get_buffer()
+                start, end = buffer.get_bounds()
+
+                # Clear previous highlights
+                buffer.remove_all_tags(start, end)
+
+                if not search_text:
+                    search_entry._search_state["matches"] = []
+                    return
+
+                content = buffer.get_text(start, end, False)
+
+                # Find all matches (case insensitive)
+                matches = []
+                search_lower = search_text.lower()
+                content_lower = content.lower()
+                start_pos = 0
+
+                while True:
+                    pos = content_lower.find(search_lower, start_pos)
+                    if pos == -1:
+                        break
+                    matches.append(pos)
+                    start_pos = pos + 1
+
+                search_entry._search_state["matches"] = matches
+
+                if matches:
+                    # Highlight all matches
+                    tag = buffer.create_tag(
+                        None, background="yellow", foreground="black"
+                    )
+
+                    for match_pos in matches:
+                        start_iter = buffer.get_iter_at_offset(match_pos)
+                        end_iter = buffer.get_iter_at_offset(
+                            match_pos + len(search_text)
+                        )
+                        buffer.apply_tag(tag, start_iter, end_iter)
+
+                    # Jump to first match if this is a new search
+                    if search_entry._search_state["last_search"] != search_text:
+                        search_entry._search_state["current_index"] = 0
+                        search_entry._search_state["last_search"] = search_text
+
+                    # Scroll to current match
+                    current_match_pos = matches[
+                        search_entry._search_state["current_index"]
+                    ]
+                    current_iter = buffer.get_iter_at_offset(current_match_pos)
+                    text_view.scroll_to_iter(current_iter, 0.0, False, 0.0, 0.0)
+                    buffer.place_cursor(current_iter)
+
+                    # Update entry style to show match count
+                    search_entry.set_tooltip_text(f"{len(matches)} matches found")
+                else:
+                    search_entry.set_tooltip_text("No matches found")
+
+            def find_next():
+                matches = search_entry._search_state["matches"]
+                if matches:
+                    search_entry._search_state["current_index"] = (
+                        search_entry._search_state["current_index"] + 1
+                    ) % len(matches)
+                    current_match_pos = matches[
+                        search_entry._search_state["current_index"]
+                    ]
+                    current_iter = text_view.get_buffer().get_iter_at_offset(
+                        current_match_pos
+                    )
+                    text_view.scroll_to_iter(current_iter, 0.0, False, 0.0, 0.0)
+                    text_view.get_buffer().place_cursor(current_iter)
+
+            # Connect signals
+            search_entry.connect("search-changed", lambda e: perform_search())
+            search_entry.connect("activate", lambda e: find_next())
+            search_entry.connect("next-match", lambda e: find_next())
+            search_entry.connect(
+                "previous-match", lambda e: find_next()
+            )  # For now, just go to next

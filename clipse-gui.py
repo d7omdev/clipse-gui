@@ -56,11 +56,13 @@ def parse_args_from_sys_argv():
 def setup_logging(debug=False):
     global log
     try:
-        log_level = logging.DEBUG if debug else logging.INFO
+        console_level = logging.DEBUG if debug else logging.INFO
+        file_level = logging.DEBUG  # Always log DEBUG level to file
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         date_format = "%Y-%m-%d %H:%M:%S"
 
         stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setLevel(console_level)
         stream_handler.setFormatter(ColorFormatter(log_format, datefmt=date_format))
 
         log_file_path = os.path.join(constants.CONFIG_DIR, "clipse-gui.log")
@@ -69,12 +71,13 @@ def setup_logging(debug=False):
             maxBytes=5 * 1024 * 1024,
             backupCount=3,
         )
+        file_handler.setLevel(file_level)
         file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
 
-        logging.basicConfig(level=log_level, handlers=[stream_handler, file_handler])
+        logging.basicConfig(level=logging.DEBUG, handlers=[stream_handler, file_handler])
         log = logging.getLogger(__name__)
         log.info(
-            f"Logging initialized at {'DEBUG' if debug else 'INFO'} level. Log file: {log_file_path}"
+            f"Logging initialized - Console: {'DEBUG' if debug else 'INFO'}, File: DEBUG. Log file: {log_file_path}"
         )
     except Exception as e:
         print(f"CRITICAL: Failed to set up logging: {e}", file=sys.stderr)

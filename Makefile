@@ -38,7 +38,7 @@ NUITKA_OPTS := \
 
 .DEFAULT_GOAL := help
 
-.PHONY: help run nuitka install uninstall clean
+.PHONY: help run nuitka install uninstall clean bump
 
 help:
 	@echo "Available targets:"
@@ -47,6 +47,7 @@ help:
 	@echo "  install    - Install built binary and assets system-wide"
 	@echo "  uninstall  - Uninstall the application"
 	@echo "  clean      - Clean build and temp files"
+	@echo "  bump       - Interactively bump version (major/minor/patch)"
 
 run:
 	@echo "Running Clipse GUI..."
@@ -82,7 +83,7 @@ install: nuitka
 	@mkdir -p "$(DESKTOP_DEST_DIR)"
 	@printf "%s\n" \
 		"[Desktop Entry]" \
-		"Version=0.1.0" \
+		"Version=0.1.5" \
 		"Type=Application" \
 		"Name=Clipse GUI" \
 		"GenericName=Clipboard Manager" \
@@ -124,4 +125,8 @@ clean:
 	@find . -type f -name '*.pyc' -delete
 	@find . -type d -name '__pycache__' -exec rm -rf {} +
 	@rm -rf build/ dist/ *.spec *.build/ "$(TMP_DESKTOP_FILE)"
+
+bump:
+	@echo "Bumping version..."
+	@$(PYTHON) bump_version.py
 

@@ -971,6 +971,7 @@ class ClipboardHistoryController:
         """Handles key presses within the preview window."""
         keyval = event.keyval
         ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
+        shift = event.state & Gdk.ModifierType.SHIFT_MASK
 
         if keyval == Gdk.KEY_Escape or (ctrl and keyval == Gdk.KEY_w):
             preview_window.destroy()
@@ -997,6 +998,41 @@ class ClipboardHistoryController:
         textview = find_textview(preview_window)
 
         if textview:
+            if ctrl and keyval == Gdk.KEY_f:
+                # Find search bar and toggle it
+                def find_search_bar(widget):
+                    if isinstance(widget, Gtk.SearchBar):
+                        return widget
+                    if hasattr(widget, 'get_children'):
+                        for child in widget.get_children():
+                            result = find_search_bar(child)
+                            if result:
+                                return result
+                    return None
+                
+                search_bar = find_search_bar(preview_window)
+                if search_bar:
+                    # Find the search entry
+                    def find_search_entry(widget):
+                        if isinstance(widget, Gtk.SearchEntry):
+                            return widget
+                        if hasattr(widget, 'get_children'):
+                            for child in widget.get_children():
+                                result = find_search_entry(child)
+                                if result:
+                                    return result
+                        return None
+                    
+                    search_entry = find_search_entry(search_bar)
+                    if search_entry:
+                        from .ui_components import _toggle_search_bar
+                        _toggle_search_bar(search_bar, search_entry, textview)
+                return True
+            if ctrl and keyval == Gdk.KEY_b:
+                # Format text with Ctrl+B
+                from .ui_components import _format_text_content
+                _format_text_content(textview)
+                return True
             if ctrl and keyval == Gdk.KEY_c:
                 buffer = textview.get_buffer()
                 clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
