@@ -38,11 +38,12 @@ NUITKA_OPTS := \
 
 .DEFAULT_GOAL := help
 
-.PHONY: help run nuitka install uninstall clean bump
+.PHONY: help run nuitka install uninstall clean bump lint
 
 help:
 	@echo "Available targets:"
 	@echo "  run        - Run the Clipse GUI from source"
+	@echo "  lint       - Run linting and type checking"
 	@echo "  nuitka     - Build a standalone binary using Nuitka"
 	@echo "  install    - Install built binary and assets system-wide"
 	@echo "  uninstall  - Uninstall the application"
@@ -52,6 +53,16 @@ help:
 run:
 	@echo "Running Clipse GUI..."
 	@$(PYTHON) $(APP_SCRIPT)
+
+lint:
+	@echo "Running linting and type checking..."
+	@if [ -d "venv" ]; then \
+		echo "Activating virtual environment..."; \
+		. venv/bin/activate && ruff check . && pyright; \
+	else \
+		echo "No virtual environment found, running with system Python..."; \
+		ruff check . && pyright; \
+	fi
 
 watch:
 	@echo "Starting Clipse GUI in watch mode..."
@@ -83,7 +94,7 @@ install: nuitka
 	@mkdir -p "$(DESKTOP_DEST_DIR)"
 	@printf "%s\n" \
 		"[Desktop Entry]" \
-		"Version=0.2.0" \
+		"Version=0.2.1" \
 		"Type=Application" \
 		"Name=Clipse GUI" \
 		"GenericName=Clipboard Manager" \

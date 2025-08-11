@@ -10,6 +10,10 @@ import gi
 from clipse_gui import __version__, constants
 
 gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("Pango", "1.0")
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("GLib", "2.0")
 
 PACKAGE_PARENT = ".."
 SCRIPT_DIR = os.path.dirname(
@@ -74,7 +78,9 @@ def setup_logging(debug=False):
         file_handler.setLevel(file_level)
         file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
 
-        logging.basicConfig(level=logging.DEBUG, handlers=[stream_handler, file_handler])
+        logging.basicConfig(
+            level=logging.DEBUG, handlers=[stream_handler, file_handler]
+        )
         log = logging.getLogger(__name__)
         log.info(
             f"Logging initialized - Console: {'DEBUG' if debug else 'INFO'}, File: DEBUG. Log file: {log_file_path}"
@@ -100,7 +106,6 @@ def main():
         sys.exit(1)
 
     try:
-        from gi.repository import Gtk, Gdk
         from clipse_gui.app import ClipseGuiApplication
 
         app = ClipseGuiApplication()

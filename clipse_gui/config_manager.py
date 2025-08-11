@@ -1,7 +1,6 @@
 import configparser
 import os
 import logging
-from typing import Optional, Any
 from copy import deepcopy
 
 log = logging.getLogger(__name__)
@@ -120,105 +119,118 @@ class ConfigManager:
             if not self.load_error_message:
                 self.load_error_message = f"Unexpected error saving configuration:\n{self.config_path}\n\nError: {e}"
 
-    def get(
-        self, section: str, key: str, fallback: Optional[Any] = None
-    ) -> Optional[str]:
+    def get(self, section: str, key: str, fallback: str = "") -> str:
+        """Get a string value from config, always returns a string."""
         if not self.config.has_section(section):
             log.warning(
                 f"Attempted to get key '{key}' from non-existent section '[{section}]'. Using fallback: {fallback}"
             )
             return fallback
-        return self.config.get(section, key, fallback=fallback)
 
-    def getint(
-        self, section: str, key: str, fallback: Optional[int] = None
-    ) -> Optional[int]:
+        result = self.config.get(section, key, fallback=fallback)
+        return result if result is not None else fallback
+
+    def getint(self, section: str, key: str, fallback: int = 0) -> int:
+        """Get an integer value from config, always returns an int."""
         if not self.config.has_section(section):
             log.warning(
                 f"Attempted to get key '{key}' from non-existent section '[{section}]'. Using fallback: {fallback}"
             )
             return fallback
+
         try:
-            return self.config.getint(section, key, fallback=fallback)
+            result = self.config.getint(section, key, fallback=None)
+            if result is not None:
+                return result
         except ValueError:
             value_from_config = self.config.get(section, key, fallback=None)
-            default_value_str = self.defaults.get(section, {}).get(key)
-            if value_from_config is not None and str(value_from_config) != str(
-                default_value_str
-            ):
+            if value_from_config is not None:
                 log.warning(
-                    f"Config value '{key}' = '{value_from_config}' in section '[{section}]' is not a valid integer. Trying fallback/default."
+                    f"Config value '{key}' = '{value_from_config}' in section '[{section}]' is not a valid integer. Using fallback."
                 )
-            if fallback is not None:
-                return fallback
-            try:
-                return int(default_value_str)
-            except (ValueError, TypeError, AttributeError):
-                log.error(
-                    f"Could not determine a valid integer fallback/default for [{section}]/{key}. Returning None."
-                )
-                return None
 
-    def getfloat(
-        self, section: str, key: str, fallback: Optional[float] = None
-    ) -> Optional[float]:
+        # Try to get default from defaults dict
+        try:
+            default_value = self.defaults.get(section, {}).get(key)
+            if default_value is not None:
+                return int(default_value)
+        except (ValueError, TypeError):
+            pass
+
+        log.warning(
+            f"Could not determine valid integer for [{section}]/{key}. Using fallback: {fallback}"
+        )
+        return fallback
+
+    def getfloat(self, section: str, key: str, fallback: float = 0.0) -> float:
+        """Get a float value from config, always returns a float."""
         if not self.config.has_section(section):
             log.warning(
                 f"Attempted to get key '{key}' from non-existent section '[{section}]'. Using fallback: {fallback}"
             )
             return fallback
+
         try:
-            return self.config.getfloat(section, key, fallback=fallback)
+            result = self.config.getfloat(section, key, fallback=None)
+            if result is not None:
+                return result
         except ValueError:
             value_from_config = self.config.get(section, key, fallback=None)
-            default_value_str = self.defaults.get(section, {}).get(key)
-            if value_from_config is not None and str(value_from_config) != str(
-                default_value_str
-            ):
+            if value_from_config is not None:
                 log.warning(
-                    f"Config value '{key}' = '{value_from_config}' in section '[{section}]' is not a valid float. Trying fallback/default."
+                    f"Config value '{key}' = '{value_from_config}' in section '[{section}]' is not a valid float. Using fallback."
                 )
-            if fallback is not None:
-                return fallback
-            try:
-                return float(default_value_str)
-            except (ValueError, TypeError, AttributeError):
-                log.error(
-                    f"Could not determine a valid float fallback/default for [{section}]/{key}. Returning None."
-                )
-                return None
 
-    def getboolean(
-        self, section: str, key: str, fallback: Optional[bool] = None
-    ) -> Optional[bool]:
-        """Gets a boolean value from the configuration."""
+        # Try to get default from defaults dict
         try:
-            return self.config.getboolean(section, key, fallback=fallback)
+            default_value = self.defaults.get(section, {}).get(key)
+            if default_value is not None:
+                return float(default_value)
+        except (ValueError, TypeError):
+            pass
+
+        log.warning(
+            f"Could not determine valid float for [{section}]/{key}. Using fallback: {fallback}"
+        )
+        return fallback
+
+    def getboolean(self, section: str, key: str, fallback: bool = False) -> bool:
+        """Get a boolean value from config, always returns a bool."""
+        if not self.config.has_section(section):
+            log.warning(
+                f"Attempted to get key '{key}' from non-existent section '[{section}]'. Using fallback: {fallback}"
+            )
+            return fallback
+
+        try:
+            result = self.config.getboolean(section, key, fallback=None)
+            if result is not None:
+                return result
         except ValueError:
-            value_from_file = self.config.get(section, key, fallback=None)
-            default_value_str = self.defaults.get(section, {}).get(key)
-            if value_from_file is not None and str(value_from_file) != str(
-                default_value_str
-            ):
+            value_from_config = self.config.get(section, key, fallback=None)
+            if value_from_config is not None:
                 log.warning(
-                    f"Config value '{key}' = '{value_from_file}' in section '[{section}]' is not a valid boolean. Using fallback: {fallback}"
+                    f"Config value '{key}' = '{value_from_config}' in section '[{section}]' is not a valid boolean. Using fallback."
                 )
-            if fallback is not None:
-                return fallback
-            try:
-                default_val = default_value_str
-                if isinstance(default_val, bool):
-                    return default_val
-                elif isinstance(default_val, str):
-                    if default_val.lower() in ["true", "yes", "on", "1"]:
+
+        # Try to get default from defaults dict
+        try:
+            default_value = self.defaults.get(section, {}).get(key)
+            if default_value is not None:
+                if isinstance(default_value, bool):
+                    return default_value
+                elif isinstance(default_value, str):
+                    if default_value.lower() in ["true", "yes", "on", "1"]:
                         return True
-                    elif default_val.lower() in ["false", "no", "off", "0"]:
+                    elif default_value.lower() in ["false", "no", "off", "0"]:
                         return False
-                elif isinstance(default_val, int):
-                    return default_val != 0
-                raise ValueError
-            except (ValueError, TypeError, AttributeError):
-                log.error(
-                    f"Could not determine a valid boolean fallback for [{section}]/{key}"
-                )
-                return None
+                elif isinstance(default_value, int):
+                    return default_value != 0
+        except (ValueError, TypeError):
+            pass
+
+        log.warning(
+            f"Could not determine valid boolean for [{section}]/{key}. Using fallback: {fallback}"
+        )
+        return fallback
+

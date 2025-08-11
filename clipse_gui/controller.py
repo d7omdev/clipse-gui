@@ -135,8 +135,6 @@ class ClipboardHistoryController:
         else:
             log.debug("CSS provider already exists.")
 
-
-
     def _on_history_updated(self, loaded_items):
         """Callback function called when the file watcher detects a change."""
         log.debug("Received history update signal from DataManager.")
@@ -167,8 +165,6 @@ class ClipboardHistoryController:
                 self.list_box.select_row(first_row)
                 first_row.grab_focus()
         return False
-
-
 
     def update_filtered_items(self):
         """Filters master list based on search and pin status, then updates UI."""
@@ -203,8 +199,6 @@ class ClipboardHistoryController:
     def _handle_save_error(self, error_message):
         """Callback for DataManager save errors."""
         self.flash_status(error_message)
-
-
 
     def populate_list_view(self):
         """Clears and populates the list view with the initial batch of filtered items."""
@@ -246,7 +240,10 @@ class ClipboardHistoryController:
                 item_info = self.filtered_items[i]
                 item_info["filtered_index"] = i
                 row = create_list_row_widget(
-                    item_info, self.image_handler, self._update_row_image_widget, self.compact_mode
+                    item_info,
+                    self.image_handler,
+                    self._update_row_image_widget,
+                    self.compact_mode,
                 )
                 if row:
                     row.item_index = item_info["original_index"]
@@ -369,8 +366,6 @@ class ClipboardHistoryController:
         except Exception as e:
             log.error(f"Unexpected error updating zoom CSS: {e}")
 
-
-
     def on_vadjustment_changed(self, adjustment):
         """Callback when the scrollbar position changes, triggers lazy load if needed."""
         if self._loading_more:
@@ -431,8 +426,6 @@ class ClipboardHistoryController:
         self._loading_more = False
         GLib.idle_add(self.check_load_more)
         return False
-
-
 
     def toggle_pin_selected(self):
         """Toggles the pin status of the currently selected item."""
@@ -971,7 +964,6 @@ class ClipboardHistoryController:
         """Handles key presses within the preview window."""
         keyval = event.keyval
         ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
-        shift = event.state & Gdk.ModifierType.SHIFT_MASK
 
         if keyval == Gdk.KEY_Escape or (ctrl and keyval == Gdk.KEY_w):
             preview_window.destroy()
@@ -1003,34 +995,65 @@ class ClipboardHistoryController:
                 def find_search_bar(widget):
                     if isinstance(widget, Gtk.SearchBar):
                         return widget
-                    if hasattr(widget, 'get_children'):
+                    if hasattr(widget, "get_children"):
                         for child in widget.get_children():
                             result = find_search_bar(child)
                             if result:
                                 return result
                     return None
-                
+
                 search_bar = find_search_bar(preview_window)
                 if search_bar:
                     # Find the search entry
                     def find_search_entry(widget):
                         if isinstance(widget, Gtk.SearchEntry):
                             return widget
-                        if hasattr(widget, 'get_children'):
+                        if hasattr(widget, "get_children"):
                             for child in widget.get_children():
                                 result = find_search_entry(child)
                                 if result:
                                     return result
                         return None
-                    
+
+                    def find_buttons_and_label(widget):
+                        """Find prev, next, close buttons and match label."""
+                        prev_btn = next_btn = close_btn = match_label = None
+                        
+                        def search_widget(w):
+                            nonlocal prev_btn, next_btn, close_btn, match_label
+                            if isinstance(w, Gtk.Button):
+                                tooltip = w.get_tooltip_text() or ""
+                                if "Previous" in tooltip:
+                                    prev_btn = w
+                                elif "Next" in tooltip:
+                                    next_btn = w
+                                elif "Close" in tooltip:
+                                    close_btn = w
+                            elif isinstance(w, Gtk.Label):
+                                text = w.get_text()
+                                if "/" in text or text in ["0/0", ""]:
+                                    match_label = w
+                            
+                            if hasattr(w, "get_children"):
+                                for child in w.get_children():
+                                    search_widget(child)
+                        
+                        search_widget(widget)
+                        return prev_btn, next_btn, close_btn, match_label
+
                     search_entry = find_search_entry(search_bar)
                     if search_entry:
                         from .ui_components import _toggle_search_bar
-                        _toggle_search_bar(search_bar, search_entry, textview)
+                        
+                        # Find buttons and label
+                        prev_btn, next_btn, close_btn, match_label = find_buttons_and_label(preview_window)
+
+                        _toggle_search_bar(search_bar, search_entry, textview, match_label, prev_btn, next_btn, close_btn)
                 return True
             if ctrl and keyval == Gdk.KEY_b:
                 # Format text with Ctrl+B
                 from .ui_components import _format_text_content
+
                 _format_text_content(textview)
                 return True
             if ctrl and keyval == Gdk.KEY_c:
@@ -1272,7 +1295,7 @@ class ClipboardHistoryController:
             self.window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
             # Show search entry in normal mode
             self.search_entry.show()
-        
+
         # Repopulate the list to apply compact mode to existing rows
         self.populate_list_view()
 

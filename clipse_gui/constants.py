@@ -55,27 +55,49 @@ DEFAULT_SETTINGS = {
 config = ConfigManager(CONFIG_FILE_PATH, DEFAULT_SETTINGS)
 
 # Derived constants - using simple fallbacks
-CLIPSE_DIR = os.path.expanduser(config.get("General", "clipse_dir", fallback="~/.config/clipse"))
-HISTORY_FILENAME = config.get("General", "history_filename", fallback="clipboard_history.json")
+CLIPSE_DIR = os.path.expanduser(
+    config.get("General", "clipse_dir", fallback="~/.config/clipse")
+)
+HISTORY_FILENAME = config.get(
+    "General", "history_filename", fallback="clipboard_history.json"
+)
 HISTORY_FILE_PATH = os.path.join(CLIPSE_DIR, HISTORY_FILENAME)
 
 ENTER_TO_PASTE = config.getboolean("General", "enter_to_paste", fallback=False)
 COMPACT_MODE = config.getboolean("General", "compact_mode", fallback=False)
 SAVE_DEBOUNCE_MS = config.getint("General", "save_debounce_ms", fallback=300)
 SEARCH_DEBOUNCE_MS = config.getint("General", "search_debounce_ms", fallback=250)
-PASTE_SIMULATION_DELAY_MS = config.getint("General", "paste_simulation_delay_ms", fallback=150)
+PASTE_SIMULATION_DELAY_MS = config.getint(
+    "General", "paste_simulation_delay_ms", fallback=150
+)
 
 COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
-X11_COPY_TOOL_CMD = config.get("Commands", "x11_copy_tool_cmd", fallback="xclip -i -selection clipboard")
-PASTE_SIMULATION_CMD_WAYLAND = config.get("Commands", "paste_simulation_cmd_wayland", fallback="wtype -M ctrl -P v -m ctrl")
-PASTE_SIMULATION_CMD_X11 = config.get("Commands", "paste_simulation_cmd_x11", fallback="xdotool key --clearmodifiers ctrl+v")
+X11_COPY_TOOL_CMD = config.get(
+    "Commands", "x11_copy_tool_cmd", fallback="xclip -i -selection clipboard"
+)
+PASTE_SIMULATION_CMD_WAYLAND = config.get(
+    "Commands", "paste_simulation_cmd_wayland", fallback="wtype -M ctrl -P v -m ctrl"
+)
+PASTE_SIMULATION_CMD_X11 = config.get(
+    "Commands",
+    "paste_simulation_cmd_x11",
+    fallback="xdotool key --clearmodifiers ctrl+v",
+)
 
 DEFAULT_WINDOW_WIDTH = config.getint("UI", "default_window_width", fallback=500)
 DEFAULT_WINDOW_HEIGHT = config.getint("UI", "default_window_height", fallback=700)
-DEFAULT_PREVIEW_TEXT_WIDTH = config.getint("UI", "default_preview_text_width", fallback=700)
-DEFAULT_PREVIEW_TEXT_HEIGHT = config.getint("UI", "default_preview_text_height", fallback=550)
-DEFAULT_PREVIEW_IMG_WIDTH = config.getint("UI", "default_preview_img_width", fallback=400)
-DEFAULT_PREVIEW_IMG_HEIGHT = config.getint("UI", "default_preview_img_height", fallback=200)
+DEFAULT_PREVIEW_TEXT_WIDTH = config.getint(
+    "UI", "default_preview_text_width", fallback=700
+)
+DEFAULT_PREVIEW_TEXT_HEIGHT = config.getint(
+    "UI", "default_preview_text_height", fallback=550
+)
+DEFAULT_PREVIEW_IMG_WIDTH = config.getint(
+    "UI", "default_preview_img_width", fallback=400
+)
+DEFAULT_PREVIEW_IMG_HEIGHT = config.getint(
+    "UI", "default_preview_img_height", fallback=200
+)
 DEFAULT_HELP_WIDTH = config.getint("UI", "default_help_width", fallback=450)
 DEFAULT_HELP_HEIGHT = config.getint("UI", "default_help_height", fallback=550)
 LIST_ITEM_IMAGE_WIDTH = config.getint("UI", "list_item_image_width", fallback=200)
@@ -83,7 +105,9 @@ LIST_ITEM_IMAGE_HEIGHT = config.getint("UI", "list_item_image_height", fallback=
 
 INITIAL_LOAD_COUNT = config.getint("Performance", "initial_load_count", fallback=30)
 LOAD_BATCH_SIZE = config.getint("Performance", "load_batch_size", fallback=20)
-LOAD_THRESHOLD_FACTOR = config.getfloat("Performance", "load_threshold_factor", fallback=0.95)
+LOAD_THRESHOLD_FACTOR = config.getfloat(
+    "Performance", "load_threshold_factor", fallback=0.95
+)
 IMAGE_CACHE_MAX_SIZE = config.getint("Performance", "image_cache_max_size", fallback=50)
 
 # CSS Styles
@@ -109,58 +133,45 @@ APP_CSS = """
     font-style: italic;
     margin-top: 3px;
 }
-.content-preview {
-    font-size: 90%;
-    color: #d3d7cf;
-    margin-top: 2px;
-}
-.status-bar {
-    padding: 4px 8px;
-    background-color: #2e3436;
-    border-top: 2px solid #555753;
-    font-size: 85%;
+.status-label {
+    border-top: 1px solid #ccc;
+    padding-top: 5px;
+    margin-top: 5px;
     color: #888a85;
+    font-style: italic;
 }
-.search-entry {
-    margin: 8px;
-    border-radius: 6px;
-}
-.help-window {
-    background-color: #2e3436;
-    color: #d3d7cf;
+textview {
+     font-family: Monospace;
 }
 .key-shortcut {
-    font-family: monospace;
+    font-family: Monospace;
     font-weight: bold;
-    color: #4a90e2;
-    padding: 2px 6px;
-    background-color: alpha(#4a90e2, 0.1);
-    border-radius: 3px;
-    border: 1px solid alpha(#4a90e2, 0.3);
+    background-color: rgba(0,0,0,0.08);
+    padding: 3px 6px;
+    border-radius: 4px;
 }
-.preview-window {
-    background-color: #2e3436;
-    color: #d3d7cf;
-}
-.preview-textview {
-    font-family: monospace;
-    background-color: #1e1e1e;
-    color: #d4d4d4;
-    padding: 8px;
-}
+
+/* Compact mode styles */
 .compact-mode .list-row {
     padding: 2px 4px;
-    margin-top: 1px;
-    margin-bottom: 1px;
-    font-size: 1.0em;
+    margin-top: 3px;
+    margin-bottom: 3px;
+}
+.compact-mode .list-row:selected {
+    border-left: 2px solid #4a90e2;
 }
 .compact-mode .timestamp {
-    font-size: 0.95em;
+    font-size: 60%;
+    margin-top: 0px;
 }
-.compact-mode .content-preview {
-    font-size: 1.0em;
+.compact-mode .status-label {
+    padding-top: 2px;
+    margin-top: 2px;
+    font-size: 80%;
 }
-"""
+.compact-mode .key-shortcut {
+    padding: 1px 3px;
+}"""
 
 log.debug(f"Using configuration directory: {CONFIG_DIR}")
 log.debug(f"Using configuration file: {CONFIG_FILE_PATH}")
@@ -168,3 +179,4 @@ log.debug(f"History file path set to: {HISTORY_FILE_PATH}")
 log.debug(f"Paste simulation Wayland: {PASTE_SIMULATION_CMD_WAYLAND}")
 log.debug(f"Paste simulation X11: {PASTE_SIMULATION_CMD_X11}")
 log.debug(f"Paste simulation delay: {PASTE_SIMULATION_DELAY_MS}ms")
+

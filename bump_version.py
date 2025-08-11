@@ -147,7 +147,7 @@ def main():
         print(f"Bumping {bump_type} version to {new_version}")
     
     # Confirm the change
-    confirm = input(f"Proceed with version bump? (y/N): ").strip().lower()
+    confirm = input("Proceed with version bump? (y/N): ").strip().lower()
     if confirm not in ["y", "yes"]:
         print("Cancelled")
         sys.exit(0)
