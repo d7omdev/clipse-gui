@@ -14,12 +14,13 @@ from .constants import (
     DEFAULT_HELP_HEIGHT,
     PROTECT_PINNED_ITEMS,
     COMPACT_MODE,
+    HOVER_TO_SELECT,
     config,
 )
 
 
 def create_list_row_widget(
-    item_info, image_handler, update_image_callback, compact_mode=False
+    item_info, image_handler, update_image_callback, compact_mode=False, hover_to_select=False
 ):
     """Creates a Gtk.ListBoxRow widget for a clipboard item."""
     original_index = item_info["original_index"]
@@ -147,6 +148,30 @@ def create_list_row_widget(
     vbox.pack_start(time_label, False, False, 0)
 
     row.add(vbox)
+    
+    # Add hover-to-select functionality if enabled
+    if hover_to_select:
+        # Add an EventBox to capture mouse events reliably
+        event_box = Gtk.EventBox()
+        event_box.set_events(Gdk.EventMask.ENTER_NOTIFY_MASK)
+        event_box.set_visible_window(False)  # Make it transparent
+        
+        # Move the vbox content into the event box
+        row.remove(vbox)
+        event_box.add(vbox)
+        row.add(event_box)
+        
+        def on_enter_notify(widget, event):
+            # Get the ListBoxRow parent
+            listbox_row = widget.get_parent()  # EventBox -> ListBoxRow
+            if listbox_row and isinstance(listbox_row, Gtk.ListBoxRow):
+                listbox = listbox_row.get_parent()  # ListBoxRow -> ListBox
+                if listbox and hasattr(listbox, 'select_row'):
+                    listbox.select_row(listbox_row)
+            return False
+        
+        event_box.connect("enter-notify-event", on_enter_notify)
+    
     return row
 
 
@@ -272,11 +297,39 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     compact_switch.set_active(COMPACT_MODE)
     compact_switch.set_halign(Gtk.Align.END)
     
+    # Hover to Select setting
+    hover_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    hover_label = Gtk.Label(label="Hover to select:")
+    hover_label.set_halign(Gtk.Align.START)
+    hover_label.set_hexpand(True)
+    
+    hover_switch = Gtk.Switch()
+    hover_switch.set_active(HOVER_TO_SELECT)
+    hover_switch.set_halign(Gtk.Align.END)
+    
     settings_changed = False
+    
+    # Buttons (need to define apply_btn before callback functions)
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    button_box.set_homogeneous(True)
+    
+    # Apply & Restart button (initially disabled)
+    apply_btn = Gtk.Button(label="Apply & Restart")
+    apply_btn.set_margin_top(10)
+    apply_btn.set_sensitive(False)  # Initially disabled
+    
+    # Close button
+    close_btn = Gtk.Button(label="Close")
+    close_btn.set_margin_top(10)
+    
+    def update_button_states():
+        """Update the state of buttons based on whether settings have changed."""
+        apply_btn.set_sensitive(settings_changed)
     
     def on_protect_switch_toggled(switch, state):
         nonlocal settings_changed
         settings_changed = True
+        update_button_states()
         # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
@@ -290,6 +343,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     def on_compact_switch_toggled(switch, state):
         nonlocal settings_changed
         settings_changed = True
+        update_button_states()
         # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
@@ -300,8 +354,25 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
         import clipse_gui.constants as constants
         constants.COMPACT_MODE = switch.get_active()
     
+    def on_hover_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        # Save to config
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "hover_to_select", str(switch.get_active()))
+        config._save_config()
+        
+        # Update the global for current session
+        import clipse_gui.constants as constants
+        constants.HOVER_TO_SELECT = switch.get_active()
+        
+        # Note: Hover-to-select requires restart to take effect since it affects row creation
+    
     protect_switch.connect("state-set", on_protect_switch_toggled)
     compact_switch.connect("state-set", on_compact_switch_toggled)
+    hover_switch.connect("state-set", on_hover_switch_toggled)
     
     protect_box.pack_start(protect_label, True, True, 0)
     protect_box.pack_start(protect_switch, False, False, 0)
@@ -309,18 +380,14 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     compact_box.pack_start(compact_label, True, True, 0)
     compact_box.pack_start(compact_switch, False, False, 0)
     
+    hover_box.pack_start(hover_label, True, True, 0)
+    hover_box.pack_start(hover_switch, False, False, 0)
+    
     settings_box.pack_start(protect_box, False, False, 0)
     settings_box.pack_start(compact_box, False, False, 0)
+    settings_box.pack_start(hover_box, False, False, 0)
     
     main_box.pack_start(settings_box, True, True, 0)
-
-    # Buttons
-    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    button_box.set_homogeneous(True)
-    
-    # Apply & Restart button
-    apply_btn = Gtk.Button(label="Apply & Restart")
-    apply_btn.set_margin_top(10)
     
     def on_apply_clicked(button):
         settings_window.destroy()
@@ -328,10 +395,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
             restart_app_cb()
     
     apply_btn.connect("clicked", on_apply_clicked)
-    
-    # Close button
-    close_btn = Gtk.Button(label="Close")
-    close_btn.set_margin_top(10)
     
     def on_close_clicked(button):
         settings_window.destroy()

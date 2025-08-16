@@ -8,6 +8,7 @@ import mimetypes
 from .constants import (
     APP_CSS,
     ENTER_TO_PASTE,
+    HOVER_TO_SELECT,
     IMAGE_CACHE_MAX_SIZE,
     INITIAL_LOAD_COUNT,
     LOAD_BATCH_SIZE,
@@ -48,6 +49,7 @@ class ClipboardHistoryController:
         self.zoom_level = 1.0
         self.search_term = ""
         self.compact_mode = config.getboolean("General", "compact_mode", fallback=False)
+        self.hover_to_select = HOVER_TO_SELECT
 
         self._loading_more = False
         self._save_timer_id = None
@@ -245,6 +247,7 @@ class ClipboardHistoryController:
                     self.image_handler,
                     self._update_row_image_widget,
                     self.compact_mode,
+                    self.hover_to_select,
                 )
                 if row:
                     row.item_index = item_info["original_index"]
@@ -1344,6 +1347,12 @@ class ClipboardHistoryController:
             self.search_entry.show()
 
         # Repopulate the list to apply compact mode to existing rows
+        self.populate_list_view()
+
+    def update_hover_to_select(self):
+        """Updates hover-to-select setting and repopulates the list."""
+        self.hover_to_select = HOVER_TO_SELECT
+        # Repopulate the list to apply hover-to-select to existing rows
         self.populate_list_view()
 
     # --- Scrolling Helpers ---
