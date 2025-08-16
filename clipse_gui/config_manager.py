@@ -233,4 +233,3 @@ class ConfigManager:
             f"Could not determine valid boolean for [{section}]/{key}. Using fallback: {fallback}"
         )
         return fallback
-

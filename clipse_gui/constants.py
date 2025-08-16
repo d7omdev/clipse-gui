@@ -67,7 +67,9 @@ HISTORY_FILE_PATH = os.path.join(CLIPSE_DIR, HISTORY_FILENAME)
 
 ENTER_TO_PASTE = config.getboolean("General", "enter_to_paste", fallback=False)
 COMPACT_MODE = config.getboolean("General", "compact_mode", fallback=False)
-PROTECT_PINNED_ITEMS = config.getboolean("General", "protect_pinned_items", fallback=False)
+PROTECT_PINNED_ITEMS = config.getboolean(
+    "General", "protect_pinned_items", fallback=False
+)
 HOVER_TO_SELECT = config.getboolean("General", "hover_to_select", fallback=False)
 SAVE_DEBOUNCE_MS = config.getint("General", "save_debounce_ms", fallback=300)
 SEARCH_DEBOUNCE_MS = config.getint("General", "search_debounce_ms", fallback=250)
@@ -183,4 +185,3 @@ log.debug(f"History file path set to: {HISTORY_FILE_PATH}")
 log.debug(f"Paste simulation Wayland: {PASTE_SIMULATION_CMD_WAYLAND}")
 log.debug(f"Paste simulation X11: {PASTE_SIMULATION_CMD_X11}")
 log.debug(f"Paste simulation delay: {PASTE_SIMULATION_DELAY_MS}ms")
-

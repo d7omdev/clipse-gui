@@ -27,7 +27,12 @@ from .constants import (
 )
 from .data_manager import DataManager
 from .image_handler import ImageHandler
-from .ui_components import create_list_row_widget, show_help_window, show_preview_window, show_settings_window
+from .ui_components import (
+    create_list_row_widget,
+    show_help_window,
+    show_preview_window,
+    show_settings_window,
+)
 from .ui_builder import build_main_window_content
 from .utils import fuzzy_search
 
@@ -458,7 +463,7 @@ class ClipboardHistoryController:
             original_index_to_remove = selected_row.item_index
             if 0 <= original_index_to_remove < len(self.items):
                 item = self.items[original_index_to_remove]
-                
+
                 # Check if the item is pinned and protection is enabled
                 if PROTECT_PINNED_ITEMS and item.get("pinned", False):
                     self.flash_status("Cannot delete pinned item: protection enabled")
@@ -985,20 +990,21 @@ class ClipboardHistoryController:
         """Restarts the application to apply settings changes."""
         import sys
         import os
+
         log.info("Restarting application to apply settings changes...")
-        
+
         # Get the current application instance
         app = self.window.get_application()
         if app:
             # Close the current application
             app.quit()
-            
+
         # Restart the application
         try:
             # Get the original command line arguments
             args = sys.argv[:]
             log.debug(f"Restarting with args: {args}")
-            
+
             # Use os.execv to replace the current process
             os.execv(sys.executable, [sys.executable] + args)
         except Exception as e:
@@ -1065,7 +1071,7 @@ class ClipboardHistoryController:
                     def find_buttons_and_label(widget):
                         """Find prev, next, close buttons and match label."""
                         prev_btn = next_btn = close_btn = match_label = None
-                        
+
                         def search_widget(w):
                             nonlocal prev_btn, next_btn, close_btn, match_label
                             if isinstance(w, Gtk.Button):
@@ -1080,22 +1086,32 @@ class ClipboardHistoryController:
                                 text = w.get_text()
                                 if "/" in text or text in ["0/0", ""]:
                                     match_label = w
-                            
+
                             if hasattr(w, "get_children"):
                                 for child in w.get_children():
                                     search_widget(child)
-                        
+
                         search_widget(widget)
                         return prev_btn, next_btn, close_btn, match_label
 
                     search_entry = find_search_entry(search_bar)
                     if search_entry:
                         from .ui_components import _toggle_search_bar
-                        
-                        # Find buttons and label
-                        prev_btn, next_btn, close_btn, match_label = find_buttons_and_label(preview_window)
 
-                        _toggle_search_bar(search_bar, search_entry, textview, match_label, prev_btn, next_btn, close_btn)
+                        # Find buttons and label
+                        prev_btn, next_btn, close_btn, match_label = (
+                            find_buttons_and_label(preview_window)
+                        )
+
+                        _toggle_search_bar(
+                            search_bar,
+                            search_entry,
+                            textview,
+                            match_label,
+                            prev_btn,
+                            next_btn,
+                            close_btn,
+                        )
                 return True
             if ctrl and keyval == Gdk.KEY_b:
                 # Format text with Ctrl+B
@@ -1245,7 +1261,9 @@ class ClipboardHistoryController:
             show_help_window(self.window, self.on_help_window_close)
             return True
         if ctrl and keyval == Gdk.KEY_comma:
-            show_settings_window(self.window, self.on_settings_window_close, self.restart_application)
+            show_settings_window(
+                self.window, self.on_settings_window_close, self.restart_application
+            )
             return True
         if keyval == Gdk.KEY_Tab:
             self.pin_filter_button.set_active(not self.pin_filter_button.get_active())
