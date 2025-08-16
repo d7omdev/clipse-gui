@@ -12,6 +12,9 @@ from .constants import (
     DEFAULT_PREVIEW_IMG_HEIGHT,
     DEFAULT_HELP_WIDTH,
     DEFAULT_HELP_HEIGHT,
+    PROTECT_PINNED_ITEMS,
+    COMPACT_MODE,
+    config,
 )
 
 
@@ -189,6 +192,7 @@ def show_help_window(parent_window, close_cb):
         ("Ctrl -", "Zoom Out main list"),
         ("Ctrl 0", "Reset Zoom main list"),
         ("?", "Show this help window"),
+        ("Ctrl+,", "Open settings"),
         ("Ctrl+Q", "Quit application"),
         ("", ""),
         ("Preview Window:", ""),
@@ -225,6 +229,139 @@ def show_help_window(parent_window, close_cb):
         lambda w, e: close_cb(w) if e.keyval == Gdk.KEY_Escape else None,
     )
     help_window.show_all()
+    close_btn.grab_focus()
+
+
+def show_settings_window(parent_window, close_cb, restart_app_cb=None):
+    """Creates and shows the settings window."""
+    settings_window = Gtk.Window(title="Settings")
+    settings_window.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+    settings_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+    settings_window.set_transient_for(parent_window)
+    settings_window.set_default_size(400, 350)
+    settings_window.set_border_width(15)
+
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    
+    # Header
+    header = Gtk.Label()
+    header.set_markup("<b>Settings</b>")
+    header.set_halign(Gtk.Align.CENTER)
+    main_box.pack_start(header, False, False, 0)
+
+    # Settings content
+    settings_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    
+    # Protect Pinned Items setting
+    protect_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    protect_label = Gtk.Label(label="Protect pinned items from deletion:")
+    protect_label.set_halign(Gtk.Align.START)
+    protect_label.set_hexpand(True)
+    
+    protect_switch = Gtk.Switch()
+    protect_switch.set_active(PROTECT_PINNED_ITEMS)
+    protect_switch.set_halign(Gtk.Align.END)
+    
+    # Compact Mode setting
+    compact_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    compact_label = Gtk.Label(label="Compact mode:")
+    compact_label.set_halign(Gtk.Align.START)
+    compact_label.set_hexpand(True)
+    
+    compact_switch = Gtk.Switch()
+    compact_switch.set_active(COMPACT_MODE)
+    compact_switch.set_halign(Gtk.Align.END)
+    
+    settings_changed = False
+    
+    def on_protect_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        # Save to config
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "protect_pinned_items", str(switch.get_active()))
+        config._save_config()
+        
+        # Update the global for current session
+        import clipse_gui.constants as constants
+        constants.PROTECT_PINNED_ITEMS = switch.get_active()
+    
+    def on_compact_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        # Save to config
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "compact_mode", str(switch.get_active()))
+        config._save_config()
+        
+        # Update the global for current session
+        import clipse_gui.constants as constants
+        constants.COMPACT_MODE = switch.get_active()
+    
+    protect_switch.connect("state-set", on_protect_switch_toggled)
+    compact_switch.connect("state-set", on_compact_switch_toggled)
+    
+    protect_box.pack_start(protect_label, True, True, 0)
+    protect_box.pack_start(protect_switch, False, False, 0)
+    
+    compact_box.pack_start(compact_label, True, True, 0)
+    compact_box.pack_start(compact_switch, False, False, 0)
+    
+    settings_box.pack_start(protect_box, False, False, 0)
+    settings_box.pack_start(compact_box, False, False, 0)
+    
+    main_box.pack_start(settings_box, True, True, 0)
+
+    # Buttons
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    button_box.set_homogeneous(True)
+    
+    # Apply & Restart button
+    apply_btn = Gtk.Button(label="Apply & Restart")
+    apply_btn.set_margin_top(10)
+    
+    def on_apply_clicked(button):
+        settings_window.destroy()
+        if restart_app_cb:
+            restart_app_cb()
+    
+    apply_btn.connect("clicked", on_apply_clicked)
+    
+    # Close button
+    close_btn = Gtk.Button(label="Close")
+    close_btn.set_margin_top(10)
+    
+    def on_close_clicked(button):
+        settings_window.destroy()
+        if settings_changed and restart_app_cb:
+            # Show a dialog asking if user wants to restart to apply changes
+            dialog = Gtk.MessageDialog(
+                parent=parent_window,
+                flags=Gtk.DialogFlags.MODAL,
+                type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                message_format="Settings have been changed. Restart the application to apply changes?"
+            )
+            response = dialog.run()
+            dialog.destroy()
+            if response == Gtk.ResponseType.YES:
+                restart_app_cb()
+    
+    close_btn.connect("clicked", on_close_clicked)
+    
+    button_box.pack_start(apply_btn, True, True, 0)
+    button_box.pack_start(close_btn, True, True, 0)
+    
+    main_box.pack_end(button_box, False, False, 0)
+
+    settings_window.add(main_box)
+    settings_window.connect(
+        "key-press-event",
+        lambda w, e: close_cb(w) if e.keyval == Gdk.KEY_Escape else None,
+    )
+    settings_window.show_all()
     close_btn.grab_focus()
 
 

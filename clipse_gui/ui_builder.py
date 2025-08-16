@@ -12,16 +12,16 @@ def build_main_window_content() -> dict:
     Creates the main UI elements and layout for the application window.
 
     Returns:
-        A dictionary containing references to key widgets:
-        {
-            "main_box": Gtk.Box (the top-level container),
-            "search_entry": Gtk.SearchEntry,
-            "pin_filter_button": Gtk.ToggleButton,
-            "compact_mode_button": Gtk.ToggleButton,
-            "scrolled_window": Gtk.ScrolledWindow,
-            "list_box": Gtk.ListBox,
-            "status_label": Gtk.Label
-        }
+         A dictionary containing references to key widgets:
+         {
+             "main_box": Gtk.Box (the top-level container),
+             "search_entry": Gtk.SearchEntry,
+             "pin_filter_button": Gtk.ToggleButton,
+             "compact_mode_button": Gtk.ToggleButton,
+             "scrolled_window": Gtk.ScrolledWindow,
+             "list_box": Gtk.ListBox,
+             "status_label": Gtk.Label
+         }
     """
     log.debug("Building main window UI content.")
     main_box = Gtk.Box(

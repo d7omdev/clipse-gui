@@ -16,6 +16,7 @@ from .constants import (
     PASTE_SIMULATION_CMD_WAYLAND,
     PASTE_SIMULATION_CMD_X11,
     PASTE_SIMULATION_DELAY_MS,
+    PROTECT_PINNED_ITEMS,
     SAVE_DEBOUNCE_MS,
     SEARCH_DEBOUNCE_MS,
     X11_COPY_TOOL_CMD,
@@ -25,7 +26,7 @@ from .constants import (
 )
 from .data_manager import DataManager
 from .image_handler import ImageHandler
-from .ui_components import create_list_row_widget, show_help_window, show_preview_window
+from .ui_components import create_list_row_widget, show_help_window, show_preview_window, show_settings_window
 from .ui_builder import build_main_window_content
 from .utils import fuzzy_search
 
@@ -453,6 +454,13 @@ class ClipboardHistoryController:
         if selected_row and hasattr(selected_row, "item_index"):
             original_index_to_remove = selected_row.item_index
             if 0 <= original_index_to_remove < len(self.items):
+                item = self.items[original_index_to_remove]
+                
+                # Check if the item is pinned and protection is enabled
+                if PROTECT_PINNED_ITEMS and item.get("pinned", False):
+                    self.flash_status("Cannot delete pinned item: protection enabled")
+                    return
+
                 item_value_preview = str(
                     self.items[original_index_to_remove].get("value", "")
                 )[:30]
@@ -960,6 +968,42 @@ class ClipboardHistoryController:
             else:
                 self.window.grab_focus()
 
+    def on_settings_window_close(self, window):
+        """Callback for when the settings window is closed."""
+        window.destroy()
+        if self.window:
+            self.window.present()
+            if self.list_box:
+                self.list_box.grab_focus()
+            else:
+                self.window.grab_focus()
+
+    def restart_application(self):
+        """Restarts the application to apply settings changes."""
+        import sys
+        import os
+        log.info("Restarting application to apply settings changes...")
+        
+        # Get the current application instance
+        app = self.window.get_application()
+        if app:
+            # Close the current application
+            app.quit()
+            
+        # Restart the application
+        try:
+            # Get the original command line arguments
+            args = sys.argv[:]
+            log.debug(f"Restarting with args: {args}")
+            
+            # Use os.execv to replace the current process
+            os.execv(sys.executable, [sys.executable] + args)
+        except Exception as e:
+            log.error(f"Failed to restart application: {e}")
+            # Fallback: just quit the application
+            if app:
+                app.quit()
+
     def on_preview_key_press(self, preview_window, event):
         """Handles key presses within the preview window."""
         keyval = event.keyval
@@ -1196,6 +1240,9 @@ class ClipboardHistoryController:
                 return True
         if keyval == Gdk.KEY_question or (shift and keyval == Gdk.KEY_slash):
             show_help_window(self.window, self.on_help_window_close)
+            return True
+        if ctrl and keyval == Gdk.KEY_comma:
+            show_settings_window(self.window, self.on_settings_window_close, self.restart_application)
             return True
         if keyval == Gdk.KEY_Tab:
             self.pin_filter_button.set_active(not self.pin_filter_button.get_active())
