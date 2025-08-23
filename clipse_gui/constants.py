@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     "Commands": {
         "copy_tool_cmd": "wl-copy",
         "x11_copy_tool_cmd": "xclip -i -selection clipboard",
-        "paste_simulation_cmd_wayland": "wtype -M ctrl -P v -m ctrl",
+        "paste_simulation_cmd_wayland": "wtype -M ctrl -P v -p v -m ctrl",
         "paste_simulation_cmd_x11": "xdotool key --clearmodifiers ctrl+v",
     },
     "UI": {
@@ -82,7 +82,7 @@ X11_COPY_TOOL_CMD = config.get(
     "Commands", "x11_copy_tool_cmd", fallback="xclip -i -selection clipboard"
 )
 PASTE_SIMULATION_CMD_WAYLAND = config.get(
-    "Commands", "paste_simulation_cmd_wayland", fallback="wtype -M ctrl -P v -m ctrl"
+    "Commands", "paste_simulation_cmd_wayland", fallback="wtype -M ctrl -P v -p v -m ctrl"
 )
 PASTE_SIMULATION_CMD_X11 = config.get(
     "Commands",

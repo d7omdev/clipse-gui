@@ -165,7 +165,7 @@ These define the external command-line tools used for interacting with the syste
 | :----------------------------- | :----- | :------------------------------------ | :------------------------------------------------------------------------------------------------- |
 | `copy_tool_cmd`                | String | `wl-copy`                             | Command used to **copy** data **to** the clipboard on Wayland sessions.                            |
 | `x11_copy_tool_cmd`            | String | `xclip -i -selection clipboard`       | Command used to **copy** data **to** the clipboard on X11 sessions.                                |
-| `paste_simulation_cmd_wayland` | String | `wtype -M ctrl -P v -m ctrl`          | Command used to **simulate paste** (e.g., Ctrl+V) on Wayland sessions. Requires `wtype` installed. |
+| `paste_simulation_cmd_wayland` | String | `wtype -M ctrl -P v -p v -m ctrl`     | Command used to **simulate paste** (e.g., Ctrl+V) on Wayland sessions. Requires `wtype` installed. |
 | `paste_simulation_cmd_x11`     | String | `xdotool key --clearmodifiers ctrl+v` | Command used to **simulate paste** (e.g., Ctrl+V) on X11 sessions. Requires `xdotool` installed.   |
 
 #### `[UI]`

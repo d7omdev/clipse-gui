@@ -15,6 +15,7 @@ from .constants import (
     PROTECT_PINNED_ITEMS,
     COMPACT_MODE,
     HOVER_TO_SELECT,
+    ENTER_TO_PASTE,
     config,
 )
 
@@ -311,6 +312,16 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     hover_switch.set_active(HOVER_TO_SELECT)
     hover_switch.set_halign(Gtk.Align.END)
 
+    # Enter to Paste setting
+    enter_paste_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    enter_paste_label = Gtk.Label(label="Enter to paste:")
+    enter_paste_label.set_halign(Gtk.Align.START)
+    enter_paste_label.set_hexpand(True)
+
+    enter_paste_switch = Gtk.Switch()
+    enter_paste_switch.set_active(ENTER_TO_PASTE)
+    enter_paste_switch.set_halign(Gtk.Align.END)
+
     settings_changed = False
 
     # Buttons (need to define apply_btn before callback functions)
@@ -377,9 +388,25 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
         # Note: Hover-to-select requires restart to take effect since it affects row creation
 
+    def on_enter_paste_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        # Save to config
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "enter_to_paste", str(switch.get_active()))
+        config._save_config()
+
+        # Update the global for current session
+        import clipse_gui.constants as constants
+
+        constants.ENTER_TO_PASTE = switch.get_active()
+
     protect_switch.connect("state-set", on_protect_switch_toggled)
     compact_switch.connect("state-set", on_compact_switch_toggled)
     hover_switch.connect("state-set", on_hover_switch_toggled)
+    enter_paste_switch.connect("state-set", on_enter_paste_switch_toggled)
 
     protect_box.pack_start(protect_label, True, True, 0)
     protect_box.pack_start(protect_switch, False, False, 0)
@@ -390,9 +417,13 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     hover_box.pack_start(hover_label, True, True, 0)
     hover_box.pack_start(hover_switch, False, False, 0)
 
+    enter_paste_box.pack_start(enter_paste_label, True, True, 0)
+    enter_paste_box.pack_start(enter_paste_switch, False, False, 0)
+
     settings_box.pack_start(protect_box, False, False, 0)
     settings_box.pack_start(compact_box, False, False, 0)
     settings_box.pack_start(hover_box, False, False, 0)
+    settings_box.pack_start(enter_paste_box, False, False, 0)
 
     main_box.pack_start(settings_box, True, True, 0)
 
