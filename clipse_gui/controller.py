@@ -990,28 +990,42 @@ class ClipboardHistoryController:
         """Restarts the application to apply settings changes."""
         import sys
         import os
+        import subprocess
+        import shutil
 
         log.info("Restarting application to apply settings changes...")
-
-        # Get the current application instance
         app = self.window.get_application()
         if app:
-            # Close the current application
             app.quit()
 
-        # Restart the application
         try:
-            # Get the original command line arguments
-            args = sys.argv[:]
-            log.debug(f"Restarting with args: {args}")
+            clipse_gui_path = shutil.which("clipse-gui")
 
-            # Use os.execv to replace the current process
-            os.execv(sys.executable, [sys.executable] + args)
+            if clipse_gui_path:
+                args = [clipse_gui_path] + sys.argv[1:]
+                log.debug(f"Restarting with system executable: {args}")
+                subprocess.Popen(args, cwd=os.getcwd())
+            elif getattr(sys, "frozen", False):
+                executable = sys.executable
+                args = [executable] + sys.argv[1:]
+                log.debug(f"Restarting with frozen executable: {args}")
+                subprocess.Popen(args, cwd=os.getcwd())
+            else:
+                original_cmd = sys.argv[0]
+                if os.path.isfile(original_cmd) and os.access(original_cmd, os.X_OK):
+                    args = [original_cmd] + sys.argv[1:]
+                    log.debug(f"Restarting with original command: {args}")
+                    subprocess.Popen(args, cwd=os.getcwd())
+                else:
+                    raise Exception(f"Cannot find executable: {original_cmd}")
+
         except Exception as e:
             log.error(f"Failed to restart application: {e}")
-            # Fallback: just quit the application
-            if app:
-                app.quit()
+
+        if app:
+            app.quit()
+        else:
+            sys.exit(0)
 
     def on_preview_key_press(self, preview_window, event):
         """Handles key presses within the preview window."""
@@ -1161,6 +1175,16 @@ class ClipboardHistoryController:
                 else:
                     app = self.window.get_application()
                     if app:
+                        # Try to minimize to tray if enabled, otherwise quit
+                        from . import constants
+
+                        if (
+                            hasattr(app, "tray_manager")
+                            and app.tray_manager
+                            and constants.MINIMIZE_TO_TRAY
+                        ):
+                            if app.tray_manager.minimize_to_tray():
+                                return True  # Successfully minimized to tray
                         app.quit()
                     else:
                         log.warning("Application instance is None. Cannot quit.")
@@ -1276,6 +1300,16 @@ class ClipboardHistoryController:
             else:
                 app = self.window.get_application()
                 if app:
+                    # Try to minimize to tray if enabled, otherwise quit
+                    from . import constants
+
+                    if (
+                        hasattr(app, "tray_manager")
+                        and app.tray_manager
+                        and constants.MINIMIZE_TO_TRAY
+                    ):
+                        if app.tray_manager.minimize_to_tray():
+                            return True  # Successfully minimized to tray
                     app.quit()
                 else:
                     log.warning("Application instance is None. Cannot quit.")

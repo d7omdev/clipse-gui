@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
         "save_debounce_ms": "300",
         "search_debounce_ms": "250",
         "paste_simulation_delay_ms": "150",
+        "minimize_to_tray": "True",
     },
     "Commands": {
         "copy_tool_cmd": "wl-copy",
@@ -76,6 +77,7 @@ SEARCH_DEBOUNCE_MS = config.getint("General", "search_debounce_ms", fallback=250
 PASTE_SIMULATION_DELAY_MS = config.getint(
     "General", "paste_simulation_delay_ms", fallback=150
 )
+MINIMIZE_TO_TRAY = config.getboolean("General", "minimize_to_tray", fallback=True)
 
 COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
 X11_COPY_TOOL_CMD = config.get(

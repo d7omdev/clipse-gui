@@ -1,8 +1,11 @@
 import os
 import json
+import logging
 from gi.repository import Gtk, Gdk, Pango, GdkPixbuf, GLib
 
 from .utils import format_date
+
+log = logging.getLogger(__name__)
 from .constants import (
     LIST_ITEM_IMAGE_WIDTH,
     LIST_ITEM_IMAGE_HEIGHT,
@@ -16,6 +19,7 @@ from .constants import (
     COMPACT_MODE,
     HOVER_TO_SELECT,
     ENTER_TO_PASTE,
+    MINIMIZE_TO_TRAY,
     config,
 )
 
@@ -322,6 +326,16 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     enter_paste_switch.set_active(ENTER_TO_PASTE)
     enter_paste_switch.set_halign(Gtk.Align.END)
 
+    # Minimize to Tray setting
+    tray_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    tray_label = Gtk.Label(label="Minimize to system tray:")
+    tray_label.set_halign(Gtk.Align.START)
+    tray_label.set_hexpand(True)
+
+    tray_switch = Gtk.Switch()
+    tray_switch.set_active(MINIMIZE_TO_TRAY)
+    tray_switch.set_halign(Gtk.Align.END)
+
     settings_changed = False
 
     # Buttons (need to define apply_btn before callback functions)
@@ -403,10 +417,35 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
         constants.ENTER_TO_PASTE = switch.get_active()
 
+    def on_tray_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        # Save to config
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "minimize_to_tray", str(switch.get_active()))
+        config._save_config()
+
+        # Update the global for current session
+        import clipse_gui.constants as constants
+        constants.MINIMIZE_TO_TRAY = switch.get_active()
+        
+        # Update tray manager if it exists
+        try:
+            # Try to get the application and tray manager
+            app = parent_window.get_application()
+            if hasattr(app, 'tray_manager') and app.tray_manager:
+                app.tray_manager.set_tray_enabled(switch.get_active())
+        except Exception as e:
+            # If we can't update dynamically, it will be applied on restart
+            logging.debug(f"Could not update tray manager dynamically: {e}")
+
     protect_switch.connect("state-set", on_protect_switch_toggled)
     compact_switch.connect("state-set", on_compact_switch_toggled)
     hover_switch.connect("state-set", on_hover_switch_toggled)
     enter_paste_switch.connect("state-set", on_enter_paste_switch_toggled)
+    tray_switch.connect("state-set", on_tray_switch_toggled)
 
     protect_box.pack_start(protect_label, True, True, 0)
     protect_box.pack_start(protect_switch, False, False, 0)
@@ -420,10 +459,14 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     enter_paste_box.pack_start(enter_paste_label, True, True, 0)
     enter_paste_box.pack_start(enter_paste_switch, False, False, 0)
 
+    tray_box.pack_start(tray_label, True, True, 0)
+    tray_box.pack_start(tray_switch, False, False, 0)
+
     settings_box.pack_start(protect_box, False, False, 0)
     settings_box.pack_start(compact_box, False, False, 0)
     settings_box.pack_start(hover_box, False, False, 0)
     settings_box.pack_start(enter_paste_box, False, False, 0)
+    settings_box.pack_start(tray_box, False, False, 0)
 
     main_box.pack_start(settings_box, True, True, 0)
 
