@@ -7,6 +7,7 @@ from .constants import (
     DEFAULT_WINDOW_WIDTH,
 )
 from .controller import ClipboardHistoryController
+from .tray_manager import TrayManager
 
 from gi.repository import Gtk, Gio, GLib  # noqa: E402
 
@@ -23,6 +24,7 @@ class ClipseGuiApplication(Gtk.Application):
         )
         self.window = None
         self.controller = None
+        self.tray_manager = None
 
     def do_startup(self):
         """Called once when the application starts."""
@@ -56,6 +58,12 @@ class ClipseGuiApplication(Gtk.Application):
                 self.window.set_icon_name("edit-copy")
             except GLib.Error as e:
                 log.warning(f"Could not set window icon name: {e}")
+            
+            # Setup tray manager
+            self.tray_manager = TrayManager(self)
+            
+            # Connect window events for tray functionality
+            self.window.connect("delete-event", self._on_window_delete)
 
             try:
                 self.controller = ClipboardHistoryController(self.window)
@@ -99,4 +107,15 @@ class ClipseGuiApplication(Gtk.Application):
             if hasattr(self.controller, "_trigger_save"):
                 self.controller._trigger_save()
 
+        # Cleanup tray resources
+        if self.tray_manager:
+            self.tray_manager.cleanup()
+        
         Gtk.Application.do_shutdown(self)
+
+    def _on_window_delete(self, window, event):
+        """Handle window delete event - minimize to tray if enabled."""
+        if self.tray_manager and constants.MINIMIZE_TO_TRAY:
+            if self.tray_manager.minimize_to_tray():
+                return True  # Prevent window destruction
+        return False  # Allow normal window destruction
