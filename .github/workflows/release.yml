@@ -1,16 +1,19 @@
 name: Release
+
 on:
   push:
     tags:
       - "v*.*.*"
+
 permissions:
   contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    environment: main
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -22,82 +25,62 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get the previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.ref }}^ 2>/dev/null || echo "")
-
           if [ -z "$PREV_TAG" ]; then
-            # If no previous tag, get all commits
             CHANGELOG=$(git log --pretty=format:"- %s" ${{ github.ref }})
           else
-            # Get commits between previous tag and current tag
             CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..${{ github.ref }})
           fi
-
-          # Clean up the changelog
-          CHANGELOG=$(echo "$CHANGELOG" | grep -v "chore:" | grep -v "ci:" | grep -v "docs:")
-
+          CHANGELOG=$(echo "$CHANGELOG" | grep -vE "^(chore|ci|docs):")
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Generate release description
-        id: release_description
+      - name: Generate release notes
+        id: release_notes
         run: |
-          # Extract installation section from README
-          INSTALL_SECTION=$(sed -n '/<h1 id="installation">Installation<\/h1>/,/<\/details>/p' README.md)
-
           cat > release_body.md << EOF
           # 🎉 Clipse GUI v${{ steps.get_version.outputs.version }}
 
-          A GTK3 graphical user interface for the excellent [clipse](https://github.com/savedra1/clipse) command-line clipboard manager.
-
-          ## ✨ Features
-
-          ### 🎯 Core Functionality
-          - 📋 View text and image entries from clipboard history
-          - 🔍 Fuzzy search with instant results
-          - 📌 Pin important items
-          - 🖼️ Image support with previews
-          - 📋 Copy items back to system clipboard
-          - ⌨️ Keyboard shortcuts for power users
-
-          ### 🎨 UI/UX
-          - 🎯 Compact mode for minimal footprint
-          - 🔄 Real-time updates
-          - 📱 Responsive and adaptive layout
-
-          ### ⚡ Performance
-          - 🚀 Lazy loading for better performance
-          - 💾 Efficient memory usage
-          - 🔄 Incremental history loading
-          - 🎯 Optimized image handling
-
-          $INSTALL_SECTION
-
-          ## 🔧 Configuration
-          Configuration file: \`~/.config/clipse-gui/settings.ini\`
+          A GTK3 graphical user interface for the excellent [clipse](https://github.com/savedra1/clipse).
 
           ## 📝 Changelog
           ${{ steps.changelog.outputs.changelog }}
-
-          ## 🤝 Contributing
-          Contributions are welcome! Please feel free to submit a Pull Request.
-
-          ## 📄 License
-          This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
           EOF
 
-          DESCRIPTION=$(cat release_body.md)
-          echo "description<<EOF" >> $GITHUB_OUTPUT
-          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          cat release_body.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv python3-dev python3-gi python3-gi-cairo \
+              gir1.2-gtk-3.0 libgirepository1.0-dev build-essential \
+              libssl-dev zlib1g-dev patchelf
+
+      - name: Setup virtualenv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with Nuitka
+        run: |
+          source venv/bin/activate
+          make nuitka
+
+      - name: Rename artifact
+        run: mv dist/clipse-gui.dist/clipse-gui.bin \
+          dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
+
+      - name: Upload release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
           name: "Release v${{ steps.get_version.outputs.version }}"
-          body: ${{ steps.release_description.outputs.description }}
-          generate_release_notes: true
+          body: ${{ steps.release_notes.outputs.body }}
+          files: dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
           draft: false
           prerelease: false
