@@ -32,6 +32,7 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
   - **Format Text:** Pretty-print JSON or clean up text formatting in preview window (Ctrl+B).
   - **Search in Preview:** Find and highlight text within preview content with match counter and navigation (Ctrl+F).
 - **Copy:** Copy any item from the history back to the system clipboard.
+- **Multi-Select Mode:** Visual selection mode for selecting and managing multiple items at once with purple-themed UI indicators.
 - **Compact Mode:** Minimal UI mode with reduced padding, hidden search bar until needed, and denser layout with optimized spacing.
 - **Hover to Select:** Automatically select list items when hovering over them with the mouse for faster navigation without clicking.
 - **Paste on Enter (Optional):** Configure the application to automatically simulate a paste (Ctrl+V) into the previously focused application after selecting an item with Enter. Requires helper tools (`wtype` for Wayland, `xdotool` for X11).
@@ -121,6 +122,7 @@ yay -S clipse-gui
   - **Search in Preview:** Press `Ctrl+F` to open search bar with highlighting and match navigation.
 - **Pin/Unpin:** Select an item and press `p`.
 - **Delete:** Select an item and press `x` or `Delete`.
+- **Multi-Select Mode:** Press `v` to enter selection mode, `Space` to toggle item selection, `Ctrl+A` to select all, `Ctrl+Shift+A` to deselect all, `Ctrl+X` or `Shift+Del` to delete selected items, and `v` or `Esc` to exit selection mode.
 - **Filter Pinned:** Press `Tab` to toggle showing only pinned items.
 - **Zoom:** Use `Ctrl +` / `Ctrl -` / `Ctrl 0` to adjust the main list item size.
 - **Settings:** Press `Ctrl+,` to open the settings window for configuring options like compact mode, hover-to-select, and pinned item protection.
@@ -153,6 +155,8 @@ The configuration file uses the standard INI format, divided into sections (`[Se
 | `enter_to_paste`            | Boolean | `False`                  | If `True`, pressing Enter will copy the item _and_ attempt to simulate a paste (e.g., Ctrl+V). Requires `wtype` (Wayland) or `xdotool` (X11).                    |
 | `compact_mode`              | Boolean | `False`                  | If `True`, enables minimal UI mode with reduced padding and hidden search bar until needed.                                                                       |
 | `hover_to_select`           | Boolean | `False`                  | If `True`, automatically selects list items when hovering over them with the mouse for faster navigation without clicking.                                        |
+| `minimize_to_tray`          | Boolean | `True`                   | If `True`, minimizes the application to system tray instead of closing when pressing Esc.                                                                         |
+| `protect_pinned_items`      | Boolean | `False`                  | If `True`, prevents pinned items from being deleted by delete operations and clear all commands.                                                                  |
 | `save_debounce_ms`          | Integer | `300`                    | Delay (in milliseconds) after pinning/deleting an item before the history file is saved to disk.                                                                 |
 | `search_debounce_ms`        | Integer | `250`                    | Delay (in milliseconds) after typing in the search bar before the list is filtered.                                                                              |
 | `paste_simulation_delay_ms` | Integer | `150`                    | Delay (in milliseconds) after hiding the Clipse GUI window before the paste simulation (if enabled) is triggered. Allows focus to return to the previous window. |

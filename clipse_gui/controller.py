@@ -55,6 +55,8 @@ class ClipboardHistoryController:
         self.search_term = ""
         self.compact_mode = config.getboolean("General", "compact_mode", fallback=False)
         self.hover_to_select = HOVER_TO_SELECT
+        self.selection_mode = False
+        self.selected_indices = set()
 
         self._loading_more = False
         self._save_timer_id = None
@@ -74,7 +76,10 @@ class ClipboardHistoryController:
         self.scrolled_window = ui_elements["scrolled_window"]
         self.list_box = ui_elements["list_box"]
         self.status_label = ui_elements["status_label"]
+        self.selection_mode_banner = ui_elements["selection_mode_banner"]
         self.vadj = self.scrolled_window.get_vadjustment()
+
+        # Hint overlay removed - not needed
 
         # Set initial compact mode button state
         self.compact_mode_button.set_active(self.compact_mode)
@@ -260,6 +265,12 @@ class ClipboardHistoryController:
                     row.is_image = bool(file_path and isinstance(file_path, str))
                     row.item_value = item_info["item"].get("value")
                     row.item_pinned = item_info["item"].get("pinned", False)
+
+                    # Apply selection styling if this item is selected
+                    if row.item_index in self.selected_indices:
+                        context = row.get_style_context()
+                        context.add_class("selected-row")
+
                     self.list_box.add(row)
             else:
                 log.warning(f"Attempted to create row for out-of-bounds index {i}")
@@ -297,13 +308,22 @@ class ClipboardHistoryController:
         count = len(self.filtered_items)
         total = len(self.items)
         status_parts = []
+
+        # Show selection count if in selection mode
+        if self.selection_mode and self.selected_indices:
+            selected_count = len(self.selected_indices)
+            status_parts.append(f"{selected_count} item{'s' if selected_count != 1 else ''} selected")
+
         if self.show_only_pinned:
             status_parts.append(f"Showing {count} pinned items")
         elif self.search_term:
             status_parts.append(f"Found {count} items ({total} total)")
         else:
             status_parts.append(f"{total} items")
-        status_parts.append("Press ? for help")
+
+        if not self.selection_mode:
+            status_parts.append("Press ? for help")
+
         final_status = " • ".join(status_parts)
         if self.status_label.get_text() != final_status:
             self.status_label.set_text(final_status)
@@ -545,6 +565,226 @@ class ClipboardHistoryController:
                     self.list_box.grab_focus()
             else:
                 self.search_entry.grab_focus()
+
+    def toggle_selection_mode(self):
+        """Toggles selection mode on/off."""
+        self.selection_mode = not self.selection_mode
+
+        if self.selection_mode:
+            # Entering selection mode
+            self.main_box.get_style_context().add_class("selection-mode")
+            # Show visual indicator
+            self.selection_mode_banner.show()
+            log.info("Entered selection mode")
+            self.flash_status("Selection mode: ON (Space to select, v to exit)")
+        else:
+            # Exiting selection mode - clear selections
+            self.deselect_all_items()
+            self.main_box.get_style_context().remove_class("selection-mode")
+            # Hide visual indicator
+            self.selection_mode_banner.hide()
+            log.info("Exited selection mode")
+            self.flash_status("Selection mode: OFF")
+
+        self.update_status_label()
+
+    def toggle_item_selection(self):
+        """Toggles the selection state of the currently focused item."""
+        if not self.selection_mode:
+            log.warning("Cannot toggle item selection: not in selection mode")
+            return
+
+        selected_row = self.list_box.get_selected_row()
+        if not selected_row or not hasattr(selected_row, "item_index"):
+            return
+
+        original_index = selected_row.item_index
+        context = selected_row.get_style_context()
+
+        if original_index in self.selected_indices:
+            # Deselect
+            self.selected_indices.remove(original_index)
+            context.remove_class("selected-row")
+            log.info(f"Deselected item at index {original_index}, classes: {context.list_classes()}")
+        else:
+            # Select
+            self.selected_indices.add(original_index)
+            context.add_class("selected-row")
+            log.info(f"Selected item at index {original_index}, classes: {context.list_classes()}")
+
+        self.update_status_label()
+
+    def select_all_items(self):
+        """Selects all currently visible items."""
+        if not self.selection_mode:
+            # Auto-enter selection mode if not already in it
+            self.toggle_selection_mode()
+
+        self.selected_indices.clear()
+
+        for row in self.list_box.get_children():
+            if hasattr(row, "item_index"):
+                original_index = row.item_index
+                self.selected_indices.add(original_index)
+                context = row.get_style_context()
+                context.add_class("selected-row")
+
+        count = len(self.selected_indices)
+        log.info(f"Selected all {count} visible items")
+        self.flash_status(f"Selected {count} items")
+        self.update_status_label()
+
+    def deselect_all_items(self):
+        """Clears all selections."""
+        for row in self.list_box.get_children():
+            if hasattr(row, "item_index"):
+                context = row.get_style_context()
+                context.remove_class("selected-row")
+
+        count = len(self.selected_indices)
+        self.selected_indices.clear()
+        log.info(f"Deselected all items (was {count})")
+        if count > 0:
+            self.flash_status("All items deselected")
+        self.update_status_label()
+
+    def delete_selected_items(self):
+        """Deletes all selected items with confirmation."""
+        if not self.selected_indices:
+            self.flash_status("No items selected for deletion")
+            return
+
+        # Count pinned vs non-pinned selected items
+        pinned_count = 0
+        non_pinned_count = 0
+        indices_to_delete = []
+
+        for idx in self.selected_indices:
+            if 0 <= idx < len(self.items):
+                item = self.items[idx]
+                if item.get("pinned", False):
+                    pinned_count += 1
+                    if not PROTECT_PINNED_ITEMS:
+                        indices_to_delete.append(idx)
+                else:
+                    non_pinned_count += 1
+                    indices_to_delete.append(idx)
+
+        if not indices_to_delete:
+            if PROTECT_PINNED_ITEMS and pinned_count > 0:
+                self.flash_status(f"Cannot delete: all {pinned_count} selected items are pinned (protection enabled)")
+            else:
+                self.flash_status("No items to delete")
+            return
+
+        # Build confirmation message
+        total_to_delete = len(indices_to_delete)
+        protected_count = pinned_count if PROTECT_PINNED_ITEMS else 0
+
+        message = f"Delete {total_to_delete} selected item{'s' if total_to_delete != 1 else ''}?"
+        if protected_count > 0:
+            message += f"\n\n({protected_count} pinned item{'s' if protected_count != 1 else ''} will be skipped due to protection)"
+
+        # Show confirmation dialog
+        dialog = Gtk.MessageDialog(
+            transient_for=self.window,
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Confirm Deletion"
+        )
+        dialog.format_secondary_text(message)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        delete_button = dialog.add_button("Delete", Gtk.ResponseType.OK)
+        delete_button.get_style_context().add_class("destructive-action")
+
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.OK:
+            # Sort indices in descending order to delete from end to beginning
+            indices_to_delete.sort(reverse=True)
+
+            for idx in indices_to_delete:
+                if 0 <= idx < len(self.items):
+                    del self.items[idx]
+
+            # Exit selection mode and clear selections
+            self.selection_mode = False
+            self.selected_indices.clear()
+            self.main_box.get_style_context().remove_class("selection-mode")
+
+            # Save and refresh
+            self.schedule_save_history()
+            self.update_filtered_items()
+
+            self.flash_status(f"Deleted {total_to_delete} item{'s' if total_to_delete != 1 else ''}")
+            log.info(f"Deleted {total_to_delete} selected items")
+
+    def clear_all_items(self):
+        """Clears all non-pinned items with confirmation."""
+        if not self.items:
+            self.flash_status("No items to clear")
+            return
+
+        # Count pinned vs non-pinned items
+        pinned_count = sum(1 for item in self.items if item.get("pinned", False))
+        non_pinned_count = len(self.items) - pinned_count
+
+        if PROTECT_PINNED_ITEMS and non_pinned_count == 0:
+            self.flash_status(f"Cannot clear: all {pinned_count} items are pinned (protection enabled)")
+            return
+
+        # Determine what will be deleted
+        if PROTECT_PINNED_ITEMS:
+            items_to_delete = non_pinned_count
+            message = f"Delete all {non_pinned_count} non-pinned item{'s' if non_pinned_count != 1 else ''}?"
+            if pinned_count > 0:
+                message += f"\n\n({pinned_count} pinned item{'s' if pinned_count != 1 else ''} will be kept)"
+        else:
+            items_to_delete = len(self.items)
+            message = f"Delete ALL {items_to_delete} item{'s' if items_to_delete != 1 else ''}?"
+            if pinned_count > 0:
+                message += f"\n\nWarning: This includes {pinned_count} pinned item{'s' if pinned_count != 1 else ''}!"
+
+        # Show confirmation dialog
+        dialog = Gtk.MessageDialog(
+            transient_for=self.window,
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Clear All Items"
+        )
+        dialog.format_secondary_text(message)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        clear_button = dialog.add_button("Clear All", Gtk.ResponseType.OK)
+        clear_button.get_style_context().add_class("destructive-action")
+
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.OK:
+            if PROTECT_PINNED_ITEMS:
+                # Keep only pinned items
+                self.items = [item for item in self.items if item.get("pinned", False)]
+            else:
+                # Delete everything
+                self.items = []
+
+            # Exit selection mode if active
+            if self.selection_mode:
+                self.selection_mode = False
+                self.selected_indices.clear()
+                self.main_box.get_style_context().remove_class("selection-mode")
+
+            # Save and refresh
+            self.schedule_save_history()
+            self.update_filtered_items()
+
+            self.flash_status(f"Cleared {items_to_delete} item{'s' if items_to_delete != 1 else ''}")
+            log.info(f"Cleared {items_to_delete} items")
 
     def _run_paste_command(self, cmd_args, input_data=None, is_binary=False):
         """Helper to run the paste command subprocess."""
@@ -1170,7 +1410,11 @@ class ClipboardHistoryController:
 
         if self.search_entry.has_focus():
             if keyval == Gdk.KEY_Escape:
-                if self.search_entry.get_text():
+                # Priority order: exit selection mode -> clear search -> quit
+                if self.selection_mode:
+                    self.toggle_selection_mode()
+                    return True
+                elif self.search_entry.get_text():
                     self.search_entry.set_text("")
                 else:
                     app = self.window.get_application()
@@ -1269,16 +1513,51 @@ class ClipboardHistoryController:
             self.search_entry.grab_focus()
             self.search_entry.select_region(0, -1)
             return True
+        if keyval == Gdk.KEY_v:
+            # Toggle selection mode
+            self.toggle_selection_mode()
+            return True
         if keyval == Gdk.KEY_space:
-            if selected_row:
+            if self.selection_mode:
+                # In selection mode, space toggles item selection
+                self.toggle_item_selection()
+                return True
+            elif selected_row:
+                # Normal mode, space shows preview
                 self.show_item_preview()
                 return True
+        if ctrl and keyval == Gdk.KEY_a:
+            if shift:
+                # Ctrl+Shift+A: Deselect all
+                self.deselect_all_items()
+            else:
+                # Ctrl+A: Select all
+                self.select_all_items()
+            return True
+        if ctrl and keyval == Gdk.KEY_x:
+            # Ctrl+X: Delete selected items
+            if self.selection_mode and self.selected_indices:
+                self.delete_selected_items()
+            return True
+        if shift and keyval == Gdk.KEY_Delete:
+            # Shift+Delete: Delete selected items
+            if self.selection_mode and self.selected_indices:
+                self.delete_selected_items()
+            return True
+        if ctrl and shift and keyval == Gdk.KEY_Delete:
+            # Ctrl+Shift+Delete: Clear all non-pinned items
+            self.clear_all_items()
+            return True
+        if ctrl and keyval == Gdk.KEY_d:
+            # Ctrl+D: Clear all non-pinned items (alternative)
+            self.clear_all_items()
+            return True
         if keyval == Gdk.KEY_p:
             if selected_row:
                 self.toggle_pin_selected()
                 return True
         if keyval in [Gdk.KEY_x, Gdk.KEY_Delete]:
-            if selected_row:
+            if selected_row and not self.selection_mode:
                 self.remove_selected_item()
                 return True
         if keyval == Gdk.KEY_question or (shift and keyval == Gdk.KEY_slash):
@@ -1294,7 +1573,11 @@ class ClipboardHistoryController:
             self.list_box.grab_focus()
             return True
         if keyval == Gdk.KEY_Escape:
-            if self.search_entry.get_text():
+            # Priority order: exit selection mode -> clear search -> quit
+            if self.selection_mode:
+                self.toggle_selection_mode()
+                return True
+            elif self.search_entry.get_text():
                 self.search_entry.set_text("")
                 self.list_box.grab_focus()
             else:

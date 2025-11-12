@@ -120,18 +120,62 @@ IMAGE_CACHE_MAX_SIZE = config.getint("Performance", "image_cache_max_size", fall
 
 # CSS Styles
 APP_CSS = """
-.pinned-row {
+listboxrow.pinned-row {
     border-left: 3px solid #ffcc00;
     font-weight: 500;
 }
-.list-row {
-    padding: 8px 12px;
-    transition: background-color 0.2s ease;
-    border-bottom: 1px solid #161A16;
+*.selected-row,
+row.selected-row,
+.selected-row {
+    background-color: alpha(#9b59b6, 0.15);
+    border-left-width: 2px;
+    border-left-style: dashed;
+    border-left-color: alpha(#9b59b6, 0.15);
+    border-right-width: 2px;
+    border-right-style: dashed;
+    border-right-color: alpha(#9b59b6, 0.15);
+    border-top-width: 1px;
+    border-top-style: dashed;
+    border-top-color: alpha(#9b59b6, 0.15);
+    border-bottom-width: 1px;
+    border-bottom-style: dashed;
+    border-bottom-color: alpha(#9b59b6, 0.15);
+    border-radius: 8px;
     margin-top: 2px;
     margin-bottom: 2px;
 }
-.list-row:selected {
+*.selected-row.pinned-row,
+row.selected-row.pinned-row,
+.selected-row.pinned-row {
+    background-color: alpha(#9b59b6, 0.15);
+    border-left-width: 1px;
+    border-left-style: dashed;
+    border-left-color: alpha(#9b59b6, 0.15);
+    border-right-width: 1px;
+    border-right-style: dashed;
+    border-right-color: alpha(#9b59b6, 0.15);
+    border-top-width: 1px;
+    border-top-style: dashed;
+    border-top-color: alpha(#9b59b6, 0.15);
+    border-bottom-width: 1px;
+    border-bottom-style: dashed;
+    border-bottom-color: alpha(#9b59b6, 0.15);
+    border-radius: 8px;
+}
+.selection-mode listboxrow.list-row {
+    transition: background-color 0.15s ease;
+}
+.selection-mode listboxrow.list-row:hover {
+    background-color: alpha(#729fcf, 0.08);
+}
+listboxrow.list-row {
+    padding: 8px 12px;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #161A16;
+    margin-top: 3px;
+    margin-bottom: 3px;
+}
+listboxrow.list-row:selected {
     border-left: 3px solid #4a90e2;
     background-color: alpha(#4a90e2, 0.1);
 }
@@ -142,11 +186,20 @@ APP_CSS = """
     margin-top: 3px;
 }
 .status-label {
-    border-top: 1px solid #ccc;
-    padding-top: 5px;
-    margin-top: 5px;
     color: #888a85;
     font-style: italic;
+}
+.visual-mode-indicator {
+    background-color: alpha(#9b59b6, 0.15);
+    color: #9b59b6;
+    font-weight: bold;
+    font-size: 90%;
+    padding: 4px 12px;
+    border-radius: 3px;
+}
+.status-bar {
+    border-top: 1px solid #ccc;
+    padding-top: 5px;
 }
 textview {
      font-family: Monospace;
@@ -160,12 +213,12 @@ textview {
 }
 
 /* Compact mode styles */
-.compact-mode .list-row {
+.compact-mode listboxrow.list-row {
     padding: 2px 4px;
     margin-top: 3px;
     margin-bottom: 3px;
 }
-.compact-mode .list-row:selected {
+.compact-mode listboxrow.list-row:selected {
     border-left: 2px solid #4a90e2;
 }
 .compact-mode .timestamp {

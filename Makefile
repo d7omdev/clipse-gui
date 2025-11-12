@@ -94,7 +94,7 @@ install: nuitka
 	@mkdir -p "$(DESKTOP_DEST_DIR)"
 	@printf "%s\n" \
 		"[Desktop Entry]" \
-		"Version=0.3.2" \
+		"Version=0.4.0" \
 		"Type=Application" \
 		"Name=Clipse GUI" \
 		"GenericName=Clipboard Manager" \

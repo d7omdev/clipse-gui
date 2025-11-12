@@ -64,10 +64,28 @@ def build_main_window_content() -> dict:
     viewport.add(list_box)
 
     # --- Status Bar ---
+    status_bar_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    status_bar_box.set_margin_top(5)
+    status_bar_box.set_margin_bottom(5)
+    status_bar_box.set_margin_start(5)
+    status_bar_box.set_margin_end(5)
+    status_bar_box.get_style_context().add_class("status-bar")
+
     status_label = Gtk.Label(label="Initializing...")
     status_label.set_halign(Gtk.Align.START)
+    status_label.set_hexpand(True)
     status_label.get_style_context().add_class("status-label")
-    main_box.pack_end(status_label, False, False, 0)
+    status_bar_box.pack_start(status_label, True, True, 0)
+
+    # Visual mode indicator (initially hidden)
+    selection_mode_banner = Gtk.Label(label="VISUAL")
+    selection_mode_banner.set_halign(Gtk.Align.END)
+    selection_mode_banner.get_style_context().add_class("visual-mode-indicator")
+    selection_mode_banner.set_no_show_all(True)
+    selection_mode_banner.hide()
+    status_bar_box.pack_end(selection_mode_banner, False, False, 0)
+
+    main_box.pack_end(status_bar_box, False, False, 0)
 
     return {
         "main_box": main_box,
@@ -78,4 +96,5 @@ def build_main_window_content() -> dict:
         "scrolled_window": scrolled_window,
         "list_box": list_box,
         "status_label": status_label,
+        "selection_mode_banner": selection_mode_banner,
     }
