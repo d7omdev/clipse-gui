@@ -71,9 +71,27 @@ jobs:
           source venv/bin/activate
           make nuitka
 
+      - name: Check build output
+        run: |
+          echo "Contents of dist directory:"
+          ls -la dist/
+          if [ -d "dist/clipse-gui.dist" ]; then
+            echo "Contents of clipse-gui.dist:"
+            ls -la dist/clipse-gui.dist/
+          fi
+
       - name: Rename artifact
-        run: mv dist/clipse-gui.dist/clipse-gui.bin \
-          dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
+        run: |
+          if [ -f "dist/clipse-gui.dist/clipse-gui.bin" ]; then
+            mv dist/clipse-gui.dist/clipse-gui.bin \
+              dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
+          elif [ -f "dist/clipse-gui.bin" ]; then
+            mv dist/clipse-gui.bin \
+              dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
+          else
+            echo "Error: Could not find binary"
+            exit 1
+          fi
 
       - name: Upload release
         uses: softprops/action-gh-release@v2
