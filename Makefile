@@ -23,12 +23,15 @@ NUITKA_DIST_DIR := $(APP_NAME).dist
 NUITKA_BINARY := $(APP_NAME).bin
 
 NUITKA_OPTS := \
-  --standalone \
+  --onefile \
   --output-dir=$(BUILD_DIR) \
   --remove-output \
   --include-package=$(PACKAGE_DIR) \
+  --include-package=gi \
+  --include-package-data=gi \
   --follow-imports \
-  --nofollow-import-to=*.tests
+  --nofollow-import-to=*.tests \
+  --assume-yes-for-downloads
 
 .DEFAULT_GOAL := help
 
@@ -69,10 +72,7 @@ nuitka:
 
 install: nuitka
 	@echo "Installing $(APP_NAME)..."
-	@sudo install -d "$(APP_DIR)"
-	@sudo cp -r "$(BUILD_DIR)/$(NUITKA_DIST_DIR)/." "$(APP_DIR)/"
-
-	@sudo ln -sf "$(APP_DIR)/$(NUITKA_BINARY)" "$(BIN_DIR)/$(APP_NAME)"
+	@sudo install -Dm755 "$(BUILD_DIR)/$(NUITKA_BINARY)" "$(BIN_DIR)/$(APP_NAME)"
 
 	@if [ -f "$(ICON_FILE)" ]; then \
 		echo "Installing icon..."; \
@@ -109,7 +109,6 @@ install: nuitka
 uninstall:
 	@echo "Uninstalling $(APP_NAME)..."
 	@sudo rm -f "$(BIN_DIR)/$(APP_NAME)"
-	@sudo rm -rf "$(APP_DIR)"
 	@sudo rm -f "$(DESKTOP_DEST_DIR)/$(DESKTOP_FILE)"
 
 	@if [ -f "$(ICON_DEST_DIR)/$(ICON_NAME).png" ]; then \
