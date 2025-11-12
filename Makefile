@@ -27,14 +27,8 @@ NUITKA_OPTS := \
   --output-dir=$(BUILD_DIR) \
   --remove-output \
   --include-package=$(PACKAGE_DIR) \
-  --include-package=gi \
-  --include-module=gi._gi \
-  --include-module=gi._propertyhelper \
-  --include-module=gi._constants \
-  --include-module=gi._signalhelper \
-  --include-module=gi._enum \
-  --include-module=gi._error \
-  --include-module=asyncio
+  --follow-imports \
+  --nofollow-import-to=*.tests
 
 .DEFAULT_GOAL := help
 
