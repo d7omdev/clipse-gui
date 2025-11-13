@@ -73,7 +73,7 @@ yay -S clipse-gui
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/clipse-gui.git # Replace with actual repo URL
+    git clone https://github.com/d7omdev/clipse-gui.git
     cd clipse-gui
     ```
 2.  **Install Dependencies:** Ensure you have Python, GTK3, PyGObject, and the required clipboard/paste tools installed (see Dependencies above).
