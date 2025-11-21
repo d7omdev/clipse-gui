@@ -177,11 +177,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -189,23 +184,32 @@ jobs:
           update: true
           install: >-
             mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-python
             mingw-w64-x86_64-python-gobject
             mingw-w64-x86_64-python-cairo
+            mingw-w64-x86_64-python-pillow
             mingw-w64-x86_64-python-pip
+            mingw-w64-x86_64-python-setuptools
 
-      - name: Install Python dependencies
+      - name: Install PyInstaller
         shell: msys2 {0}
         run: |
-          pip install pyinstaller pillow
+          python -m pip install --no-build-isolation pyinstaller
 
       - name: Build with PyInstaller
         shell: msys2 {0}
         run: |
-          pyinstaller --onefile --windowed \
+          python -m PyInstaller --onefile --windowed \
             --name clipse-gui-v${{ needs.generate-changelog.outputs.version }}-windows-x86_64 \
             --icon=clipse-gui.png \
             --hidden-import=gi \
+            --hidden-import=gi.repository.Gtk \
+            --hidden-import=gi.repository.Gdk \
+            --hidden-import=gi.repository.GLib \
+            --hidden-import=gi.repository.GdkPixbuf \
+            --hidden-import=gi.repository.Pango \
             --collect-all gi \
+            --collect-submodules gi \
             clipse-gui.py
 
       - name: Upload artifact
