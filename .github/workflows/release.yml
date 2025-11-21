@@ -9,9 +9,12 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  generate-changelog:
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+      release_body: ${{ steps.release_notes.outputs.body }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +34,7 @@ jobs:
           else
             CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..${{ github.ref }})
           fi
-          CHANGELOG=$(echo "$CHANGELOG" | grep -vE "^(chore|ci|docs):")
+          CHANGELOG=$(echo "$CHANGELOG" | grep -vE "^(chore|ci|docs):" || echo "- Initial release")
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -39,18 +42,63 @@ jobs:
       - name: Generate release notes
         id: release_notes
         run: |
-          cat > release_body.md << EOF
+          cat > release_body.md << 'EOF'
           # 🎉 Clipse GUI v${{ steps.get_version.outputs.version }}
 
           A GTK3 graphical user interface for the excellent [clipse](https://github.com/savedra1/clipse).
 
+          ## 📦 Downloads
+
+          ### Linux
+          - **x86_64**: `clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64`
+          - **ARM64/aarch64**: `clipse-gui-v${{ steps.get_version.outputs.version }}-linux-aarch64`
+
+          ### Windows
+          - **x86_64**: `clipse-gui-v${{ steps.get_version.outputs.version }}-windows-x86_64.exe`
+          - **Note**: Requires GTK3 runtime. See [Windows Setup Guide](https://github.com/savedra1/clipse-gui#windows-installation)
+
+          ### macOS
+          - **Intel (x86_64)**: `clipse-gui-v${{ steps.get_version.outputs.version }}-macos-x86_64`
+          - **Apple Silicon (ARM64)**: `clipse-gui-v${{ steps.get_version.outputs.version }}-macos-arm64`
+          - **Note**: Requires GTK3 via Homebrew. See [macOS Setup Guide](https://github.com/savedra1/clipse-gui#macos-installation)
+
           ## 📝 Changelog
           ${{ steps.changelog.outputs.changelog }}
+
+          ## 🚀 Installation
+
+          ### Linux
+          ```bash
+          # Download and install
+          chmod +x clipse-gui-v${{ steps.get_version.outputs.version }}-linux-*
+          sudo mv clipse-gui-v${{ steps.get_version.outputs.version }}-linux-* /usr/local/bin/clipse-gui
+          ```
+
+          ### Windows
+          1. Install GTK3 runtime from [gtk.org](https://www.gtk.org/docs/installations/windows/)
+          2. Download and run the `.exe` file
+
+          ### macOS
+          ```bash
+          # Install GTK3 first
+          brew install gtk+3 pygobject3
+
+          # Download and install
+          chmod +x clipse-gui-v${{ steps.get_version.outputs.version }}-macos-*
+          sudo mv clipse-gui-v${{ steps.get_version.outputs.version }}-macos-* /usr/local/bin/clipse-gui
+          ```
           EOF
 
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat release_body.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+  build-linux-x86_64:
+    runs-on: ubuntu-latest
+    needs: generate-changelog
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
@@ -74,15 +122,171 @@ jobs:
       - name: Rename artifact
         run: |
           mv dist/clipse-gui.bin \
-            dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
-          chmod +x dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
+            dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
+          chmod +x dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
 
-      - name: Upload release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
+
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    needs: generate-changelog
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build in ARM64 container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            arm64v8/ubuntu:22.04 \
+            bash -c "
+              apt-get update && \
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                python3 python3-pip python3-venv python3-dev python3-gi python3-gi-cairo \
+                gir1.2-gtk-3.0 libgirepository1.0-dev build-essential \
+                libssl-dev zlib1g-dev patchelf libcairo2-dev pkg-config && \
+              python3 -m venv --system-site-packages venv && \
+              . venv/bin/activate && \
+              pip install --upgrade pip && \
+              pip install Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0 && \
+              make nuitka && \
+              mv dist/clipse-gui.bin dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64 && \
+              chmod +x dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
+            "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
+
+  build-windows:
+    runs-on: windows-latest
+    needs: generate-changelog
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-python-gobject
+            mingw-w64-x86_64-python-cairo
+            mingw-w64-x86_64-python-pip
+
+      - name: Install Python dependencies
+        shell: msys2 {0}
+        run: |
+          pip install pyinstaller pillow
+
+      - name: Build with PyInstaller
+        shell: msys2 {0}
+        run: |
+          pyinstaller --onefile --windowed \
+            --name clipse-gui-v${{ needs.generate-changelog.outputs.version }}-windows-x86_64 \
+            --icon=clipse-gui.png \
+            --hidden-import=gi \
+            --collect-all gi \
+            clipse-gui.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-windows-x86_64.exe
+
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - os: macos-13  # Intel x86_64
+            arch: x86_64
+          - os: macos-14  # Apple Silicon ARM64
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    needs: generate-changelog
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install GTK3 and dependencies
+        run: |
+          brew install gtk+3 pygobject3 cairo
+
+      - name: Install Python dependencies
+        run: |
+          pip install pyinstaller pillow
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile \
+            --name clipse-gui-v${{ needs.generate-changelog.outputs.version }}-macos-${{ matrix.arch }} \
+            --hidden-import=gi \
+            --collect-all gi \
+            clipse-gui.py
+
+      - name: Make executable
+        run: |
+          chmod +x dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-macos-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-macos-${{ matrix.arch }}
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: 
+      - generate-changelog
+      - build-linux-x86_64
+      - build-linux-arm64
+      - build-windows
+      - build-macos
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
-          name: "Release v${{ steps.get_version.outputs.version }}"
-          body: ${{ steps.release_notes.outputs.body }}
-          files: dist/clipse-gui-v${{ steps.get_version.outputs.version }}-linux-x86_64
+          name: "Release v${{ needs.generate-changelog.outputs.version }}"
+          body: ${{ needs.generate-changelog.outputs.release_body }}
+          files: |
+            artifacts/linux-x86_64/*
+            artifacts/linux-arm64/*
+            artifacts/windows-x86_64/*
+            artifacts/macos-x86_64/*
+            artifacts/macos-arm64/*
           draft: false
           prerelease: false

@@ -60,6 +60,13 @@ This GUI provides a visual way to browse, search, pin, preview, and copy items f
   - **X11:** `xdotool`
   - _(These tools are only needed if you enable `enter_to_paste = True` in the configuration)_
 
+### Pre-built Binaries
+
+Download pre-built binaries for your platform from the [Releases page](https://github.com/d7om/clipse-gui/releases):
+- **Linux** (x86_64, ARM64/aarch64)
+- **Windows** (x86_64) - Requires GTK3 runtime
+- **macOS** (Intel x86_64, Apple Silicon ARM64) - Requires GTK3 via Homebrew
+
 ### Arch Linux (AUR)
 
 An AUR package is available: `clipse-gui`
