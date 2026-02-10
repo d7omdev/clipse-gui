@@ -32,6 +32,8 @@ from .ui_components import (
     show_help_window,
     show_preview_window,
     show_settings_window,
+    create_pin_icon,
+    animate_pin_shake,
 )
 from .ui_builder import build_main_window_content
 from .utils import fuzzy_search
@@ -352,22 +354,8 @@ class ClipboardHistoryController:
                     if isinstance(widget, Gtk.Box):
                         hbox = widget.get_children()[0]
                         if isinstance(hbox, Gtk.Box):
-                            children = hbox.get_children()
-                            if children:
-                                pin_icon = children[-1]
-                                if isinstance(pin_icon, Gtk.Image):
-                                    icon_name = (
-                                        "starred-symbolic"
-                                        if is_pinned
-                                        else "non-starred-symbolic"
-                                    )
-                                    pin_icon.set_from_icon_name(
-                                        icon_name,
-                                        Gtk.IconSize.BUTTON,
-                                    )
-                                    pin_icon.set_tooltip_text(
-                                        "Pinned" if is_pinned else "Not Pinned"
-                                    )
+                            # Animate the rotation wiggle effect
+                            animate_pin_shake(hbox, is_pinned)
                 except (AttributeError, IndexError, TypeError) as e:
                     log.warning(
                         f"Could not update pin icon for row {original_index}: {e}"

@@ -41,7 +41,7 @@ DEFAULT_SETTINGS = {
         "default_preview_text_height": "550",
         "default_preview_img_width": "400",
         "default_preview_img_height": "200",
-        "default_help_width": "450",
+        "default_help_width": "550",
         "default_help_height": "550",
         "list_item_image_width": "200",
         "list_item_image_height": "100",
@@ -84,7 +84,9 @@ X11_COPY_TOOL_CMD = config.get(
     "Commands", "x11_copy_tool_cmd", fallback="xclip -i -selection clipboard"
 )
 PASTE_SIMULATION_CMD_WAYLAND = config.get(
-    "Commands", "paste_simulation_cmd_wayland", fallback="wtype -M ctrl -P v -p v -m ctrl"
+    "Commands",
+    "paste_simulation_cmd_wayland",
+    fallback="wtype -M ctrl -P v -p v -m ctrl",
 )
 PASTE_SIMULATION_CMD_X11 = config.get(
     "Commands",
@@ -106,8 +108,8 @@ DEFAULT_PREVIEW_IMG_WIDTH = config.getint(
 DEFAULT_PREVIEW_IMG_HEIGHT = config.getint(
     "UI", "default_preview_img_height", fallback=200
 )
-DEFAULT_HELP_WIDTH = config.getint("UI", "default_help_width", fallback=450)
-DEFAULT_HELP_HEIGHT = config.getint("UI", "default_help_height", fallback=550)
+DEFAULT_HELP_WIDTH = config.getint("UI", "default_help_width", fallback=600)
+DEFAULT_HELP_HEIGHT = config.getint("UI", "default_help_height", fallback=700)
 LIST_ITEM_IMAGE_WIDTH = config.getint("UI", "list_item_image_width", fallback=200)
 LIST_ITEM_IMAGE_HEIGHT = config.getint("UI", "list_item_image_height", fallback=100)
 
@@ -120,120 +122,115 @@ IMAGE_CACHE_MAX_SIZE = config.getint("Performance", "image_cache_max_size", fall
 
 # CSS Styles
 APP_CSS = """
-listboxrow.pinned-row {
+.pinned-row {
     border-left: 3px solid #ffcc00;
+    background-color: alpha(#ffcc00, 0.01);
     font-weight: 500;
 }
-*.selected-row,
-row.selected-row,
-.selected-row {
-    background-color: alpha(#9b59b6, 0.15);
-    border-left-width: 2px;
-    border-left-style: dashed;
-    border-left-color: alpha(#9b59b6, 0.15);
-    border-right-width: 2px;
-    border-right-style: dashed;
-    border-right-color: alpha(#9b59b6, 0.15);
-    border-top-width: 1px;
-    border-top-style: dashed;
-    border-top-color: alpha(#9b59b6, 0.15);
-    border-bottom-width: 1px;
-    border-bottom-style: dashed;
-    border-bottom-color: alpha(#9b59b6, 0.15);
-    border-radius: 8px;
-    margin-top: 2px;
-    margin-bottom: 2px;
-}
-*.selected-row.pinned-row,
-row.selected-row.pinned-row,
-.selected-row.pinned-row {
-    background-color: alpha(#9b59b6, 0.15);
-    border-left-width: 1px;
-    border-left-style: dashed;
-    border-left-color: alpha(#9b59b6, 0.15);
-    border-right-width: 1px;
-    border-right-style: dashed;
-    border-right-color: alpha(#9b59b6, 0.15);
-    border-top-width: 1px;
-    border-top-style: dashed;
-    border-top-color: alpha(#9b59b6, 0.15);
-    border-bottom-width: 1px;
-    border-bottom-style: dashed;
-    border-bottom-color: alpha(#9b59b6, 0.15);
-    border-radius: 8px;
-}
-.selection-mode listboxrow.list-row {
-    transition: background-color 0.15s ease;
-}
-.selection-mode listboxrow.list-row:hover {
-    background-color: alpha(#729fcf, 0.08);
-}
-listboxrow.list-row {
+.list-row {
     padding: 8px 12px;
-    transition: background-color 0.2s ease;
-    border-bottom: 1px solid #161A16;
-    margin-top: 3px;
-    margin-bottom: 3px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    border-left: 3px solid transparent;
+    transition: background-color 0.2s ease,
+                border-left-color 0.2s ease;
 }
-listboxrow.list-row:selected {
-    border-left: 3px solid #4a90e2;
-    background-color: alpha(#4a90e2, 0.1);
+.list-row:hover {
+    background-color: alpha(#4a90e2, 0.07);
+    border-left-color: alpha(#4a90e2, 0.45);
+}
+.list-row:selected {
+    background-color: alpha(#4a90e2, 0.13);
+    border-left-color: #4a90e2;
+}
+
+/* Visual mode selection */
+.visual-mode-indicator {
+    background-color: #7a3d8f;
+    padding-right: 4px;
+    padding-left: 4px;
+    border-radius: 4px;
+
+}
+
+.list-row.selected-row {
+    background-color: alpha(#9b59b6, 0.15);
+    border-left-color: #9b59b6;
+}
+.list-row.selected-row:hover {
+    background-color: alpha(#9b59b6, 0.2);
+    border-left-color: #9b59b6;
+}
+
+/* Pinned + visual mode selected */
+.pinned-row.selected-row {
+    background-color: alpha(#ffcc00, 0.14);
+    border-left-color: #ffcc00;
+}
+
+.pinned-row:hover {
+    background-color: alpha(#ffcc00, 0.08);
+    border-left-color: alpha(#ffcc00, 0.7);
+}
+.pinned-row:selected {
+    background-color: alpha(#ffcc00, 0.12);
+    border-left-color: #ffcc00;
 }
 .timestamp {
-    font-size: 85%;
-    color: #888a85;
+    font-size: 82%;
+    color: alpha(#ffffff, 0.35);
     font-style: italic;
-    margin-top: 3px;
+    margin-top: 2px;
 }
 .status-label {
-    color: #888a85;
-    font-style: italic;
-}
-.visual-mode-indicator {
-    background-color: alpha(#9b59b6, 0.15);
-    color: #9b59b6;
-    font-weight: bold;
-    font-size: 90%;
-    padding: 4px 12px;
-    border-radius: 3px;
-}
-.status-bar {
-    border-top: 1px solid #ccc;
+    border-top: 1px solid alpha(#ffffff, 0.07);
     padding-top: 5px;
+    margin-top: 5px;
+    color: alpha(#ffffff, 0.4);
+    font-style: italic;
+    font-size: 90%;
 }
 textview {
-     font-family: Monospace;
+    font-family: Monospace;
 }
 .key-shortcut {
     font-family: Monospace;
     font-weight: bold;
-    background-color: rgba(0,0,0,0.08);
-    padding: 3px 6px;
+    font-size: 88%;
+    background-color: alpha(#ffffff, 0.07);
+    color: alpha(#ffffff, 0.75);
+    padding: 2px 6px;
     border-radius: 4px;
+    border: 1px solid alpha(#ffffff, 0.12);
 }
 
-/* Compact mode styles */
-.compact-mode listboxrow.list-row {
-    padding: 2px 4px;
-    margin-top: 3px;
-    margin-bottom: 3px;
+/* Help window section styling */
+frame > box {
+    background-color: alpha(#ffffff, 0.02);
+    border-radius: 6px;
+    padding: 10px;
+    border: 1px solid alpha(#ffffff, 0.05);
 }
-.compact-mode listboxrow.list-row:selected {
-    border-left: 2px solid #4a90e2;
-}
-.compact-mode .timestamp {
-    font-size: 60%;
-    margin-top: 0px;
-}
-.compact-mode .status-label {
-    padding-top: 2px;
-    margin-top: 2px;
-    font-size: 80%;
-}
-.compact-mode .key-shortcut {
-    padding: 1px 3px;
-}"""
 
+frame > box > label {
+    color: alpha(#ffffff, 0.85);
+}
+
+/* Pin icon styling */
+.pin-icon {
+    transition: all 0.2s ease;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+.pin-icon.pinned {
+    color: #ffcc00;
+}
+
+.pin-icon.unpinned {
+    color: alpha(#ffffff, 0.25);
+}
+"""
 log.debug(f"Using configuration directory: {CONFIG_DIR}")
 log.debug(f"Using configuration file: {CONFIG_FILE_PATH}")
 log.debug(f"History file path set to: {HISTORY_FILE_PATH}")

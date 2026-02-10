@@ -1,9 +1,81 @@
 import os
 import json
 import logging
+from io import BytesIO
 from gi.repository import Gtk, Gdk, Pango, GdkPixbuf, GLib
 
 from .utils import format_date
+
+# SVG icon data for pushpin (rotated 25 degrees to the right for a natural look)
+PIN_SVG_BASE = """<?xml version="1.0" encoding="UTF-8"?>
+<svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g transform="rotate({angle} 12 12)">
+        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"
+              fill="currentColor" stroke="currentColor" stroke-width="0.5"/>
+    </g>
+</svg>
+"""
+
+def create_pin_icon(is_pinned, angle=25):
+    """Creates a pin icon from SVG data with color based on pinned state."""
+    try:
+        # Replace currentColor with actual color
+        color = "#ffcc00" if is_pinned else "rgba(255,255,255,0.25)"
+        svg_data = PIN_SVG_BASE.replace("currentColor", color).replace("{angle}", str(angle))
+
+        # Load SVG into pixbuf
+        loader = GdkPixbuf.PixbufLoader.new_with_type('svg')
+        loader.write(svg_data.encode('utf-8'))
+        loader.close()
+        pixbuf = loader.get_pixbuf()
+
+        # Create image from pixbuf
+        image = Gtk.Image.new_from_pixbuf(pixbuf)
+        image.get_style_context().add_class("pin-icon")
+        if is_pinned:
+            image.get_style_context().add_class("pinned")
+        else:
+            image.get_style_context().add_class("unpinned")
+
+        return image
+    except Exception as e:
+        log.error(f"Error creating pin icon: {e}")
+        # Fallback to label
+        label = Gtk.Label(label="📌")
+        return label
+
+def animate_pin_shake(container, is_pinned):
+    """Animates a gentle rotation wiggle effect by recreating the icon at different angles."""
+    # Gentle rotation sequence: base angle ± small rotations
+    base_angle = 25
+    rotation_sequence = [
+        base_angle + 8,   # Rotate right
+        base_angle - 8,   # Rotate left
+        base_angle + 5,   # Rotate right (less)
+        base_angle - 5,   # Rotate left (less)
+        base_angle        # Back to normal
+    ]
+
+    def apply_wiggle(index):
+        if index < len(rotation_sequence):
+            # Remove old icon
+            children = container.get_children()
+            if children:
+                old_icon = children[-1]
+                container.remove(old_icon)
+
+            # Create new icon with rotated angle
+            new_icon = create_pin_icon(is_pinned, rotation_sequence[index])
+            new_icon.set_tooltip_text("Pinned" if is_pinned else "Not Pinned")
+            new_icon.set_valign(Gtk.Align.START)  # Keep top alignment
+            new_icon.set_margin_top(2)  # Keep top margin
+            new_icon.show()
+            container.pack_end(new_icon, False, False, 0)
+
+            GLib.timeout_add(70, apply_wiggle, index + 1)
+        return False
+
+    apply_wiggle(0)
 
 log = logging.getLogger(__name__)
 from .constants import (
@@ -142,10 +214,11 @@ def create_list_row_widget(
 
     hbox.pack_start(content_box, False, True, 0)
 
-    pin_icon = Gtk.Image.new_from_icon_name(
-        "starred" if row.item_pinned else "non-starred-symbolic", Gtk.IconSize.MENU
-    )
+    # Use custom SVG pin icon
+    pin_icon = create_pin_icon(row.item_pinned)
     pin_icon.set_tooltip_text("Pinned" if row.item_pinned else "Not Pinned")
+    pin_icon.set_valign(Gtk.Align.START)  # Align to top
+    pin_icon.set_margin_top(2)  # Small margin from the very top
     hbox.pack_end(pin_icon, False, False, 0)
 
     vbox.pack_start(hbox, False, False, 0)
@@ -194,75 +267,130 @@ def show_help_window(parent_window, close_cb):
     help_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
     help_window.set_transient_for(parent_window)
     help_window.set_default_size(DEFAULT_HELP_WIDTH, DEFAULT_HELP_HEIGHT)
-    help_window.set_border_width(10)
+    help_window.set_border_width(20)
 
-    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+
+    # Header
+    header = Gtk.Label()
+    header.set_markup("<span size='x-large' weight='bold'>Keyboard Shortcuts</span>")
+    header.set_halign(Gtk.Align.CENTER)
+    header.set_margin_bottom(10)
+    main_box.pack_start(header, False, False, 0)
+
+    # Scrolled window for content
     scrolled = Gtk.ScrolledWindow()
     scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-    content_box.set_margin_start(10)
-    content_box.set_margin_end(10)
-    header = Gtk.Label()
-    header.set_markup("<b>Keyboard Shortcuts</b>")
-    header.set_halign(Gtk.Align.CENTER)
-    content_box.pack_start(header, False, False, 10)
 
-    mappings = [
-        ("Slash / f", "Focus search field"),
-        ("Esc", "Clear search / Close Preview / Close Help / Quit App (main)"),
-        ("↑ / k", "Navigate Up"),
-        ("↓ / j", "Navigate Down"),
-        ("PgUp", "Scroll Page Up"),
-        ("PgDn", "Scroll Page Down"),
-        ("Home", "Go to Top"),
-        ("End", "Go to Bottom (of loaded items)"),
-        ("Enter", "Copy selected item to clipboard"),
-        ("Shift + Enter", "Copy & Paste selected item in current app"),
-        ("Space", "Show full item preview / Toggle selection (in selection mode)"),
-        ("p", "Toggle pin status for selected item"),
-        ("x / Del", "Delete selected item"),
-        ("Tab", "Toggle 'Pinned Only' filter"),
-        ("Ctrl +", "Zoom In main list"),
-        ("Ctrl -", "Zoom Out main list"),
-        ("Ctrl 0", "Reset Zoom main list"),
-        ("?", "Show this help window"),
-        ("Ctrl+,", "Open settings"),
-        ("Ctrl+Q", "Quit application"),
-        ("", ""),
-        ("Multi-Select:", ""),
-        ("v", "Toggle selection mode"),
-        ("Space (selection mode)", "Toggle item selection"),
-        ("Ctrl+A", "Select all visible items"),
-        ("Ctrl+Shift+A", "Deselect all items"),
-        ("Ctrl+X / Shift+Del", "Delete selected items"),
-        ("Ctrl+Shift+Del / Ctrl+D", "Clear all non-pinned items"),
-        ("", ""),
-        ("Preview Window:", ""),
-        ("Ctrl+F", "Find text in preview"),
-        ("Ctrl+B", "Format text (pretty-print JSON)"),
-        ("Ctrl+C", "Copy text from preview"),
+    # Main grid for table-like layout
+    main_grid = Gtk.Grid()
+    main_grid.set_column_spacing(30)
+    main_grid.set_row_spacing(4)
+    main_grid.set_margin_start(25)
+    main_grid.set_margin_end(25)
+    main_grid.set_margin_top(15)
+    main_grid.set_margin_bottom(15)
+
+    # Define all shortcuts in order with section headers
+    shortcuts_data = [
+        # Navigation
+        ("NAVIGATION", None, True),
+        ("Slash / f", "Focus search field", False),
+        ("↑ / k", "Navigate up", False),
+        ("↓ / j", "Navigate down", False),
+        ("PgUp", "Scroll page up", False),
+        ("PgDn", "Scroll page down", False),
+        ("Home", "Go to top", False),
+        ("End", "Go to bottom (of loaded items)", False),
+        ("Tab", "Toggle 'Pinned Only' filter", False),
+
+        ("", None, False),  # Spacer
+
+        # Actions
+        ("ACTIONS", None, True),
+        ("Enter", "Copy selected item to clipboard", False),
+        ("Shift+Enter", "Copy & paste selected item", False),
+        ("Space", "Show full preview", False),
+        ("p", "Toggle pin status", False),
+        ("x / Del", "Delete selected item", False),
+
+        ("", None, False),  # Spacer
+
+        # Multi-Select Mode
+        ("MULTI-SELECT MODE", None, True),
+        ("v", "Toggle selection mode", False),
+        ("Space", "Toggle item selection (in selection mode)", False),
+        ("Ctrl+A", "Select all visible items", False),
+        ("Ctrl+Shift+A", "Deselect all items", False),
+        ("Ctrl+X / Shift+Del", "Delete selected items", False),
+        ("Ctrl+Shift+Del / Ctrl+D", "Clear all non-pinned items", False),
+
+        ("", None, False),  # Spacer
+
+        # View
+        ("VIEW", None, True),
+        ("Ctrl +", "Zoom in", False),
+        ("Ctrl -", "Zoom out", False),
+        ("Ctrl 0", "Reset zoom", False),
+
+        ("", None, False),  # Spacer
+
+        # Preview Window
+        ("PREVIEW WINDOW", None, True),
+        ("Ctrl+F", "Find text in preview", False),
+        ("Ctrl+B", "Format text (pretty-print JSON)", False),
+        ("Ctrl+C", "Copy text from preview", False),
+
+        ("", None, False),  # Spacer
+
+        # General
+        ("GENERAL", None, True),
+        ("?", "Show this help window", False),
+        ("Ctrl+,", "Open settings", False),
+        ("Esc", "Clear search / Close window / Exit mode", False),
+        ("Ctrl+Q", "Quit application", False),
     ]
 
-    grid = Gtk.Grid()
-    grid.set_column_spacing(20)
-    grid.set_row_spacing(8)
-    grid.set_margin_bottom(10)
-    for i, (key, desc) in enumerate(mappings):
-        key_label = Gtk.Label(label=key)
-        key_label.set_halign(Gtk.Align.START)
-        key_label.get_style_context().add_class("key-shortcut")
-        desc_label = Gtk.Label(label=desc)
-        desc_label.set_halign(Gtk.Align.START)
-        desc_label.set_line_wrap(True)
-        grid.attach(key_label, 0, i, 1, 1)
-        grid.attach(desc_label, 1, i, 1, 1)
+    row = 0
+    for key, desc, is_header in shortcuts_data:
+        if is_header:
+            # Section header
+            header_label = Gtk.Label()
+            header_label.set_markup(f"<span weight='bold' size='large' foreground='#4a90e2'>{key}</span>")
+            header_label.set_halign(Gtk.Align.START)
+            header_label.set_margin_top(10 if row > 0 else 0)
+            header_label.set_margin_bottom(8)
+            main_grid.attach(header_label, 0, row, 2, 1)
+            row += 1
+        elif key == "":
+            # Spacer row
+            spacer = Gtk.Label(label="")
+            spacer.set_size_request(-1, 10)
+            main_grid.attach(spacer, 0, row, 2, 1)
+            row += 1
+        else:
+            # Regular shortcut row
+            key_label = Gtk.Label(label=key)
+            key_label.set_halign(Gtk.Align.START)
+            key_label.set_margin_end(25)
+            key_label.get_style_context().add_class("key-shortcut")
 
-    content_box.pack_start(grid, False, False, 0)
-    scrolled.add(content_box)
+            desc_label = Gtk.Label(label=desc)
+            desc_label.set_halign(Gtk.Align.START)
+            desc_label.set_line_wrap(False)
+            desc_label.set_xalign(0)
+
+            main_grid.attach(key_label, 0, row, 1, 1)
+            main_grid.attach(desc_label, 1, row, 1, 1)
+            row += 1
+
+    scrolled.add(main_grid)
+    main_box.pack_start(scrolled, True, True, 0)
+
+    # Close button
     close_btn = Gtk.Button(label="Close")
     close_btn.set_margin_top(10)
     close_btn.connect("clicked", lambda b: help_window.destroy())
-    main_box.pack_start(scrolled, True, True, 0)
     main_box.pack_end(close_btn, False, False, 0)
 
     help_window.add(main_box)
@@ -437,13 +565,14 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
         # Update the global for current session
         import clipse_gui.constants as constants
+
         constants.MINIMIZE_TO_TRAY = switch.get_active()
-        
+
         # Update tray manager if it exists
         try:
             # Try to get the application and tray manager
             app = parent_window.get_application()
-            if hasattr(app, 'tray_manager') and app.tray_manager:
+            if hasattr(app, "tray_manager") and app.tray_manager:
                 app.tray_manager.set_tray_enabled(switch.get_active())
         except Exception as e:
             # If we can't update dynamically, it will be applied on restart
