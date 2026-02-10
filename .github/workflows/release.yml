@@ -135,8 +135,11 @@ jobs:
 
       - name: Add icon
         run: |
+          # Copy icon to hicolor theme directory (for GTK)
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp clipse-gui.png AppDir/usr/share/icons/hicolor/256x256/apps/clipse-gui.png
+          # Copy icon to AppDir root (required by appimagetool)
+          cp clipse-gui.png AppDir/clipse-gui.png
 
       - name: Build AppImage
         run: |
