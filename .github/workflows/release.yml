@@ -27,11 +27,12 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.ref }}^ 2>/dev/null || echo "")
+          set -e
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$PREV_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"- %s" ${{ github.ref }})
+            CHANGELOG=$(git log --pretty=format:"- %s" ${{ github.ref_name }})
           else
-            CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..${{ github.ref }})
+            CHANGELOG=$(git log --pretty=format:"- %s" $PREV_TAG..${{ github.ref_name }})
           fi
           CHANGELOG=$(echo "$CHANGELOG" | grep -vE "^(chore|ci|docs):" || echo "- Initial release")
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
@@ -71,6 +72,7 @@ jobs:
 
       - name: Build
         run: |
+          set -e
           python3 -m venv --system-site-packages venv
           . venv/bin/activate
           pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
@@ -100,6 +102,7 @@ jobs:
 
       - name: Install AppImage tools
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y \
             libfuse2 wget patchelf desktop-file-utils
@@ -111,6 +114,7 @@ jobs:
 
       - name: Prepare AppDir
         run: |
+          set -e
           mkdir -p AppDir/usr/bin
           mv dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64 \
              AppDir/usr/bin/clipse-gui
@@ -136,6 +140,7 @@ jobs:
 
       - name: Build AppImage
         run: |
+          set -e
           export ARCH=x86_64
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
@@ -163,9 +168,11 @@ jobs:
 
       - name: Build in ARM64 container
         run: |
+          set -e
           docker run --rm --platform linux/arm64 \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace arm64v8/ubuntu:22.04 bash -c "
+              set -e
               apt-get update &&
               apt-get install -y python3 python3-pip python3-venv python3-dev \
                 python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
@@ -207,8 +214,9 @@ jobs:
 
       - name: Build
         run: |
-          pip install pyinstaller pillow
-          pyinstaller --onefile \
+          set -e
+          python -m pip install pyinstaller pillow
+          python -m PyInstaller --onefile \
             --name clipse-gui-v${{ needs.generate-changelog.outputs.version }}-macos-${{ matrix.arch }} \
             --hidden-import=gi \
             --collect-all gi \
@@ -236,7 +244,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
           name: "Release v${{ needs.generate-changelog.outputs.version }}"
           body: ${{ needs.generate-changelog.outputs.release_body }}
           files: |

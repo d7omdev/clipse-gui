@@ -74,7 +74,7 @@ class TrayManager:
             self.status_icon.connect("activate", self._on_tray_activate)
             self.status_icon.connect("popup-menu", self._on_tray_popup_menu)
             self.status_icon.set_visible(False)
-        except Exception as e:
+        except Exception:
             self.status_icon = None
 
     def _create_basic_menu(self):
@@ -109,7 +109,7 @@ class TrayManager:
                 and hasattr(self.application.controller, "data_manager")
             ):
                 items = self.application.controller.data_manager.load_history()
-        except:
+        except Exception:
             pass
 
         recent_items = items[:5] if items else []
@@ -171,7 +171,7 @@ class TrayManager:
             )
             menu_item.show()
             self.menu.append(menu_item)
-        except:
+        except Exception:
             pass
 
     def _copy_item_to_clipboard(self, item):
@@ -187,7 +187,7 @@ class TrayManager:
                     controller.copy_image_to_clipboard(file_path)
                 else:
                     controller.copy_text_to_clipboard(value)
-        except:
+        except Exception:
             pass
 
     def _on_tray_activate(self, status_icon):

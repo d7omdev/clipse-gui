@@ -32,7 +32,6 @@ from .ui_components import (
     show_help_window,
     show_preview_window,
     show_settings_window,
-    create_pin_icon,
     animate_pin_shake,
 )
 from .ui_builder import build_main_window_content

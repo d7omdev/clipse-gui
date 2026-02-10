@@ -1,10 +1,27 @@
 import os
 import json
 import logging
-from io import BytesIO
 from gi.repository import Gtk, Gdk, Pango, GdkPixbuf, GLib
 
 from .utils import format_date
+from .constants import (
+    LIST_ITEM_IMAGE_WIDTH,
+    LIST_ITEM_IMAGE_HEIGHT,
+    DEFAULT_PREVIEW_TEXT_WIDTH,
+    DEFAULT_PREVIEW_TEXT_HEIGHT,
+    DEFAULT_PREVIEW_IMG_WIDTH,
+    DEFAULT_PREVIEW_IMG_HEIGHT,
+    DEFAULT_HELP_WIDTH,
+    DEFAULT_HELP_HEIGHT,
+    PROTECT_PINNED_ITEMS,
+    COMPACT_MODE,
+    HOVER_TO_SELECT,
+    ENTER_TO_PASTE,
+    MINIMIZE_TO_TRAY,
+    config,
+)
+
+log = logging.getLogger(__name__)
 
 # SVG icon data for pushpin (rotated 25 degrees to the right for a natural look)
 PIN_SVG_BASE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -76,24 +93,6 @@ def animate_pin_shake(container, is_pinned):
         return False
 
     apply_wiggle(0)
-
-log = logging.getLogger(__name__)
-from .constants import (
-    LIST_ITEM_IMAGE_WIDTH,
-    LIST_ITEM_IMAGE_HEIGHT,
-    DEFAULT_PREVIEW_TEXT_WIDTH,
-    DEFAULT_PREVIEW_TEXT_HEIGHT,
-    DEFAULT_PREVIEW_IMG_WIDTH,
-    DEFAULT_PREVIEW_IMG_HEIGHT,
-    DEFAULT_HELP_WIDTH,
-    DEFAULT_HELP_HEIGHT,
-    PROTECT_PINNED_ITEMS,
-    COMPACT_MODE,
-    HOVER_TO_SELECT,
-    ENTER_TO_PASTE,
-    MINIMIZE_TO_TRAY,
-    config,
-)
 
 
 def create_list_row_widget(

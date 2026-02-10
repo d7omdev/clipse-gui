@@ -1,0 +1,38 @@
+#!/bin/bash
+# Pre-commit hook to run linting on staged Python files
+
+echo "Running pre-commit lint checks..."
+
+# Get list of staged Python files
+STAGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -z "$STAGED_PY_FILES" ]; then
+    echo "No Python files staged, skipping lint check."
+    exit 0
+fi
+
+echo "Linting staged Python files:"
+echo "$STAGED_PY_FILES"
+echo ""
+
+# Check if ruff is available
+if command -v ruff &> /dev/null; then
+    RUFF_CMD="ruff"
+elif [ -d "venv" ] && [ -f "venv/bin/ruff" ]; then
+    RUFF_CMD="venv/bin/ruff"
+else
+    echo "Error: ruff not found. Please install it or ensure venv is set up."
+    exit 1
+fi
+
+# Run ruff check on staged files
+if ! echo "$STAGED_PY_FILES" | xargs "$RUFF_CMD" check; then
+    echo ""
+    echo "❌ Linting failed! Please fix the errors above before committing."
+    echo "   Run 'make lint' for full details."
+    exit 1
+fi
+
+echo ""
+echo "✅ Linting passed!"
+exit 0

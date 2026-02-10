@@ -39,13 +39,14 @@ NUITKA_OPTS := \
 
 help:
 	@echo "Available targets:"
-	@echo "  run        - Run the Clipse GUI from source"
-	@echo "  lint       - Run linting and type checking"
-	@echo "  nuitka     - Build a standalone binary using Nuitka"
-	@echo "  install    - Install built binary and assets system-wide"
-	@echo "  uninstall  - Uninstall the application"
-	@echo "  clean      - Clean build and temp files"
-	@echo "  bump       - Interactively bump version (major/minor/patch)"
+	@echo "  run           - Run the Clipse GUI from source"
+	@echo "  lint          - Run linting and type checking"
+	@echo "  install-hooks - Install git pre-commit hook for linting"
+	@echo "  nuitka        - Build a standalone binary using Nuitka"
+	@echo "  install       - Install built binary and assets system-wide"
+	@echo "  uninstall     - Uninstall the application"
+	@echo "  clean         - Clean build and temp files"
+	@echo "  bump          - Interactively bump version (major/minor/patch)"
 
 run:
 	@echo "Running Clipse GUI..."
@@ -133,4 +134,10 @@ clean:
 bump:
 	@echo "Bumping version..."
 	@$(PYTHON) bump_version.py
+
+install-hooks:
+	@echo "Installing git hooks..."
+	@cp .githooks/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Pre-commit hook installed successfully!"
 
