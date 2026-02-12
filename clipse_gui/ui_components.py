@@ -18,6 +18,8 @@ from .constants import (
     HOVER_TO_SELECT,
     ENTER_TO_PASTE,
     MINIMIZE_TO_TRAY,
+    TRAY_ITEMS_COUNT,
+    TRAY_PASTE_ON_SELECT,
     config,
 )
 
@@ -33,16 +35,19 @@ PIN_SVG_BASE = """<?xml version="1.0" encoding="UTF-8"?>
 </svg>
 """
 
+
 def create_pin_icon(is_pinned, angle=25):
     """Creates a pin icon from SVG data with color based on pinned state."""
     try:
         # Replace currentColor with actual color
         color = "#ffcc00" if is_pinned else "rgba(255,255,255,0.25)"
-        svg_data = PIN_SVG_BASE.replace("currentColor", color).replace("{angle}", str(angle))
+        svg_data = PIN_SVG_BASE.replace("currentColor", color).replace(
+            "{angle}", str(angle)
+        )
 
         # Load SVG into pixbuf
-        loader = GdkPixbuf.PixbufLoader.new_with_type('svg')
-        loader.write(svg_data.encode('utf-8'))
+        loader = GdkPixbuf.PixbufLoader.new_with_type("svg")
+        loader.write(svg_data.encode("utf-8"))
         loader.close()
         pixbuf = loader.get_pixbuf()
 
@@ -61,16 +66,17 @@ def create_pin_icon(is_pinned, angle=25):
         label = Gtk.Label(label="📌")
         return label
 
+
 def animate_pin_shake(container, is_pinned):
     """Animates a gentle rotation wiggle effect by recreating the icon at different angles."""
     # Gentle rotation sequence: base angle ± small rotations
     base_angle = 25
     rotation_sequence = [
-        base_angle + 8,   # Rotate right
-        base_angle - 8,   # Rotate left
-        base_angle + 5,   # Rotate right (less)
-        base_angle - 5,   # Rotate left (less)
-        base_angle        # Back to normal
+        base_angle + 8,  # Rotate right
+        base_angle - 8,  # Rotate left
+        base_angle + 5,  # Rotate right (less)
+        base_angle - 5,  # Rotate left (less)
+        base_angle,  # Back to normal
     ]
 
     def apply_wiggle(index):
@@ -101,6 +107,7 @@ def create_list_row_widget(
     update_image_callback,
     compact_mode=False,
     hover_to_select=False,
+    single_click_callback=None,
 ):
     """Creates a Gtk.ListBoxRow widget for a clipboard item."""
     original_index = item_info["original_index"]
@@ -253,6 +260,21 @@ def create_list_row_widget(
 
         event_box.connect("enter-notify-event", on_enter_notify)
 
+    # Add single-click support if callback provided
+    if single_click_callback:
+
+        def on_button_press(widget, event):
+            # Single-click (left button) triggers paste
+            if event.button == 1:  # Left mouse button
+                # Check if it's a single click (not double-click)
+                # Double-click is handled by row-activated signal
+                if event.type == Gdk.EventType.BUTTON_PRESS:
+                    single_click_callback(row)
+                    return True  # Stop propagation
+            return False
+
+        row.connect("button-press-event", on_button_press)
+
     return row
 
 
@@ -302,9 +324,7 @@ def show_help_window(parent_window, close_cb):
         ("Home", "Go to top", False),
         ("End", "Go to bottom (of loaded items)", False),
         ("Tab", "Toggle 'Pinned Only' filter", False),
-
         ("", None, False),  # Spacer
-
         # Actions
         ("ACTIONS", None, True),
         ("Enter", "Copy selected item to clipboard", False),
@@ -312,9 +332,7 @@ def show_help_window(parent_window, close_cb):
         ("Space", "Show full preview", False),
         ("p", "Toggle pin status", False),
         ("x / Del", "Delete selected item", False),
-
         ("", None, False),  # Spacer
-
         # Multi-Select Mode
         ("MULTI-SELECT MODE", None, True),
         ("v", "Toggle selection mode", False),
@@ -323,25 +341,19 @@ def show_help_window(parent_window, close_cb):
         ("Ctrl+Shift+A", "Deselect all items", False),
         ("Ctrl+X / Shift+Del", "Delete selected items", False),
         ("Ctrl+Shift+Del / Ctrl+D", "Clear all non-pinned items", False),
-
         ("", None, False),  # Spacer
-
         # View
         ("VIEW", None, True),
         ("Ctrl +", "Zoom in", False),
         ("Ctrl -", "Zoom out", False),
         ("Ctrl 0", "Reset zoom", False),
-
         ("", None, False),  # Spacer
-
         # Preview Window
         ("PREVIEW WINDOW", None, True),
         ("Ctrl+F", "Find text in preview", False),
         ("Ctrl+B", "Format text (pretty-print JSON)", False),
         ("Ctrl+C", "Copy text from preview", False),
-
         ("", None, False),  # Spacer
-
         # General
         ("GENERAL", None, True),
         ("?", "Show this help window", False),
@@ -355,7 +367,9 @@ def show_help_window(parent_window, close_cb):
         if is_header:
             # Section header
             header_label = Gtk.Label()
-            header_label.set_markup(f"<span weight='bold' size='large' foreground='#4a90e2'>{key}</span>")
+            header_label.set_markup(
+                f"<span weight='bold' size='large' foreground='#4a90e2'>{key}</span>"
+            )
             header_label.set_halign(Gtk.Align.START)
             header_label.set_margin_top(10 if row > 0 else 0)
             header_label.set_margin_bottom(8)
@@ -401,90 +415,186 @@ def show_help_window(parent_window, close_cb):
     close_btn.grab_focus()
 
 
+def _create_section_frame(title):
+    """Helper to create a framed section with a label."""
+    frame = Gtk.Frame()
+    frame.set_shadow_type(Gtk.ShadowType.NONE)
+
+    label = Gtk.Label()
+    label.set_markup(f"<b>{title}</b>")
+    label.set_halign(Gtk.Align.START)
+    frame.set_label_widget(label)
+
+    frame.get_style_context().add_class("settings-section")
+
+    return frame
+
+
+def _create_setting_row(label_text, widget, tooltip=None):
+    """Helper to create a setting row with label and widget."""
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    box.set_margin_start(10)
+    box.set_margin_end(10)
+    box.set_margin_top(5)
+    box.set_margin_bottom(5)
+
+    label = Gtk.Label(label=label_text)
+    label.set_halign(Gtk.Align.START)
+    label.set_hexpand(True)
+    if tooltip:
+        label.set_tooltip_text(tooltip)
+
+    widget.set_halign(Gtk.Align.END)
+    if tooltip:
+        widget.set_tooltip_text(tooltip)
+
+    box.pack_start(label, True, True, 0)
+    box.pack_start(widget, False, False, 0)
+
+    return box
+
+
 def show_settings_window(parent_window, close_cb, restart_app_cb=None):
-    """Creates and shows the settings window."""
+    """Creates and shows the enhanced settings window with sections."""
     settings_window = Gtk.Window(title="Settings")
     settings_window.set_type_hint(Gdk.WindowTypeHint.DIALOG)
     settings_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
     settings_window.set_transient_for(parent_window)
-    settings_window.set_default_size(400, 350)
+    settings_window.set_default_size(450, 500)
     settings_window.set_border_width(15)
 
-    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
 
     # Header
     header = Gtk.Label()
-    header.set_markup("<b>Settings</b>")
+    header.set_markup("<big><b>Settings</b></big>")
     header.set_halign(Gtk.Align.CENTER)
+    header.set_margin_bottom(10)
     main_box.pack_start(header, False, False, 0)
 
-    # Settings content
-    settings_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    # Scrollable content area
+    scrolled = Gtk.ScrolledWindow()
+    scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    scrolled.set_vexpand(True)
 
-    # Protect Pinned Items setting
-    protect_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    protect_label = Gtk.Label(label="Protect pinned items from deletion:")
-    protect_label.set_halign(Gtk.Align.START)
-    protect_label.set_hexpand(True)
+    # Content box for all sections
+    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    content_box.set_margin_bottom(10)
 
-    protect_switch = Gtk.Switch()
-    protect_switch.set_active(PROTECT_PINNED_ITEMS)
-    protect_switch.set_halign(Gtk.Align.END)
+    # ============ GENERAL SECTION ============
+    general_frame = _create_section_frame("General")
+    general_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+    general_box.set_margin_top(10)
+    general_box.set_margin_bottom(10)
 
     # Compact Mode setting
-    compact_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    compact_label = Gtk.Label(label="Compact mode:")
-    compact_label.set_halign(Gtk.Align.START)
-    compact_label.set_hexpand(True)
-
     compact_switch = Gtk.Switch()
     compact_switch.set_active(COMPACT_MODE)
-    compact_switch.set_halign(Gtk.Align.END)
+    compact_box = _create_setting_row(
+        "Compact mode:",
+        compact_switch,
+        "Use a more compact layout with smaller margins",
+    )
 
     # Hover to Select setting
-    hover_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    hover_label = Gtk.Label(label="Hover to select:")
-    hover_label.set_halign(Gtk.Align.START)
-    hover_label.set_hexpand(True)
-
     hover_switch = Gtk.Switch()
     hover_switch.set_active(HOVER_TO_SELECT)
-    hover_switch.set_halign(Gtk.Align.END)
+    hover_box = _create_setting_row(
+        "Hover to select:",
+        hover_switch,
+        "Select items by hovering over them with the mouse",
+    )
 
     # Enter to Paste setting
-    enter_paste_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    enter_paste_label = Gtk.Label(label="Enter to paste:")
-    enter_paste_label.set_halign(Gtk.Align.START)
-    enter_paste_label.set_hexpand(True)
-
     enter_paste_switch = Gtk.Switch()
     enter_paste_switch.set_active(ENTER_TO_PASTE)
-    enter_paste_switch.set_halign(Gtk.Align.END)
+    enter_paste_box = _create_setting_row(
+        "Enter to paste:",
+        enter_paste_switch,
+        "Press Enter to paste the selected item and close the window",
+    )
+
+    general_box.pack_start(compact_box, False, False, 0)
+    general_box.pack_start(hover_box, False, False, 0)
+    general_box.pack_start(enter_paste_box, False, False, 0)
+    general_frame.add(general_box)
+    content_box.pack_start(general_frame, False, False, 0)
+
+    # ============ CLIPBOARD SECTION ============
+    clipboard_frame = _create_section_frame("Clipboard")
+    clipboard_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+    clipboard_box.set_margin_top(10)
+    clipboard_box.set_margin_bottom(10)
+
+    # Protect Pinned Items setting
+    protect_switch = Gtk.Switch()
+    protect_switch.set_active(PROTECT_PINNED_ITEMS)
+    protect_box = _create_setting_row(
+        "Protect pinned items:",
+        protect_switch,
+        "Prevent pinned items from being deleted when clearing history",
+    )
+
+    clipboard_box.pack_start(protect_box, False, False, 0)
+    clipboard_frame.add(clipboard_box)
+    content_box.pack_start(clipboard_frame, False, False, 0)
+
+    # ============ SYSTEM TRAY SECTION ============
+    tray_frame = _create_section_frame("System Tray")
+    tray_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+    tray_box.set_margin_top(10)
+    tray_box.set_margin_bottom(10)
 
     # Minimize to Tray setting
-    tray_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-    tray_label = Gtk.Label(label="Minimize to system tray:")
-    tray_label.set_halign(Gtk.Align.START)
-    tray_label.set_hexpand(True)
-
     tray_switch = Gtk.Switch()
     tray_switch.set_active(MINIMIZE_TO_TRAY)
-    tray_switch.set_halign(Gtk.Align.END)
+    tray_enable_box = _create_setting_row(
+        "Minimize to system tray:",
+        tray_switch,
+        "Keep the app running in the system tray when closing the window",
+    )
 
+    # Tray Items Count setting
+    tray_items_spin = Gtk.SpinButton.new_with_range(5, 50, 1)
+    tray_items_spin.set_value(TRAY_ITEMS_COUNT)
+    tray_items_box = _create_setting_row(
+        "Number of tray items:",
+        tray_items_spin,
+        "How many recent items to show in the system tray menu",
+    )
+
+    # Tray Paste on Select setting
+    tray_paste_switch = Gtk.Switch()
+    tray_paste_switch.set_active(TRAY_PASTE_ON_SELECT)
+    tray_paste_box = _create_setting_row(
+        "Paste on select from tray:",
+        tray_paste_switch,
+        "Automatically paste the item when selected from the tray menu",
+    )
+
+    tray_box.pack_start(tray_enable_box, False, False, 0)
+    tray_box.pack_start(tray_items_box, False, False, 0)
+    tray_box.pack_start(tray_paste_box, False, False, 0)
+    tray_frame.add(tray_box)
+    content_box.pack_start(tray_frame, False, False, 0)
+
+    scrolled.add(content_box)
+    main_box.pack_start(scrolled, True, True, 0)
+
+    # Track changes
     settings_changed = False
 
-    # Buttons (need to define apply_btn before callback functions)
+    # Buttons
     button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
     button_box.set_homogeneous(True)
+    button_box.set_margin_top(10)
 
     # Apply & Restart button (initially disabled)
     apply_btn = Gtk.Button(label="Apply & Restart")
-    apply_btn.set_margin_top(10)
-    apply_btn.set_sensitive(False)  # Initially disabled
+    apply_btn.set_sensitive(False)
 
     # Close button
     close_btn = Gtk.Button(label="Close")
-    close_btn.set_margin_top(10)
 
     def update_button_states():
         """Update the state of buttons based on whether settings have changed."""
@@ -494,13 +604,10 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
         nonlocal settings_changed
         settings_changed = True
         update_button_states()
-        # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "protect_pinned_items", str(switch.get_active()))
         config._save_config()
-
-        # Update the global for current session
         import clipse_gui.constants as constants
 
         constants.PROTECT_PINNED_ITEMS = switch.get_active()
@@ -509,13 +616,10 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
         nonlocal settings_changed
         settings_changed = True
         update_button_states()
-        # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "compact_mode", str(switch.get_active()))
         config._save_config()
-
-        # Update the global for current session
         import clipse_gui.constants as constants
 
         constants.COMPACT_MODE = switch.get_active()
@@ -524,30 +628,22 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
         nonlocal settings_changed
         settings_changed = True
         update_button_states()
-        # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "hover_to_select", str(switch.get_active()))
         config._save_config()
-
-        # Update the global for current session
         import clipse_gui.constants as constants
 
         constants.HOVER_TO_SELECT = switch.get_active()
-
-        # Note: Hover-to-select requires restart to take effect since it affects row creation
 
     def on_enter_paste_switch_toggled(switch, state):
         nonlocal settings_changed
         settings_changed = True
         update_button_states()
-        # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "enter_to_paste", str(switch.get_active()))
         config._save_config()
-
-        # Update the global for current session
         import clipse_gui.constants as constants
 
         constants.ENTER_TO_PASTE = switch.get_active()
@@ -556,55 +652,52 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
         nonlocal settings_changed
         settings_changed = True
         update_button_states()
-        # Save to config
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "minimize_to_tray", str(switch.get_active()))
         config._save_config()
-
-        # Update the global for current session
         import clipse_gui.constants as constants
 
         constants.MINIMIZE_TO_TRAY = switch.get_active()
-
-        # Update tray manager if it exists
         try:
-            # Try to get the application and tray manager
             app = parent_window.get_application()
             if hasattr(app, "tray_manager") and app.tray_manager:
                 app.tray_manager.set_tray_enabled(switch.get_active())
         except Exception as e:
-            # If we can't update dynamically, it will be applied on restart
             logging.debug(f"Could not update tray manager dynamically: {e}")
 
+    def on_tray_items_changed(spin):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "tray_items_count", str(int(spin.get_value())))
+        config._save_config()
+        import clipse_gui.constants as constants
+
+        constants.TRAY_ITEMS_COUNT = int(spin.get_value())
+
+    def on_tray_paste_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "tray_paste_on_select", str(switch.get_active()))
+        config._save_config()
+        import clipse_gui.constants as constants
+
+        constants.TRAY_PASTE_ON_SELECT = switch.get_active()
+
+    # Connect signals
     protect_switch.connect("state-set", on_protect_switch_toggled)
     compact_switch.connect("state-set", on_compact_switch_toggled)
     hover_switch.connect("state-set", on_hover_switch_toggled)
     enter_paste_switch.connect("state-set", on_enter_paste_switch_toggled)
     tray_switch.connect("state-set", on_tray_switch_toggled)
-
-    protect_box.pack_start(protect_label, True, True, 0)
-    protect_box.pack_start(protect_switch, False, False, 0)
-
-    compact_box.pack_start(compact_label, True, True, 0)
-    compact_box.pack_start(compact_switch, False, False, 0)
-
-    hover_box.pack_start(hover_label, True, True, 0)
-    hover_box.pack_start(hover_switch, False, False, 0)
-
-    enter_paste_box.pack_start(enter_paste_label, True, True, 0)
-    enter_paste_box.pack_start(enter_paste_switch, False, False, 0)
-
-    tray_box.pack_start(tray_label, True, True, 0)
-    tray_box.pack_start(tray_switch, False, False, 0)
-
-    settings_box.pack_start(protect_box, False, False, 0)
-    settings_box.pack_start(compact_box, False, False, 0)
-    settings_box.pack_start(hover_box, False, False, 0)
-    settings_box.pack_start(enter_paste_box, False, False, 0)
-    settings_box.pack_start(tray_box, False, False, 0)
-
-    main_box.pack_start(settings_box, True, True, 0)
+    tray_items_spin.connect("value-changed", on_tray_items_changed)
+    tray_paste_switch.connect("state-set", on_tray_paste_switch_toggled)
 
     def on_apply_clicked(button):
         settings_window.destroy()
@@ -616,13 +709,12 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     def on_close_clicked(button):
         settings_window.destroy()
         if settings_changed and restart_app_cb:
-            # Show a dialog asking if user wants to restart to apply changes
             dialog = Gtk.MessageDialog(
-                parent=parent_window,
-                flags=Gtk.DialogFlags.MODAL,
-                type=Gtk.MessageType.QUESTION,
+                transient_for=settings_window,
+                modal=True,
+                message_type=Gtk.MessageType.QUESTION,
                 buttons=Gtk.ButtonsType.YES_NO,
-                message_format="Settings have been changed. Restart the application to apply changes?",
+                text="Settings have been changed. Restart to apply changes?",
             )
             response = dialog.run()
             dialog.destroy()
@@ -633,7 +725,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
     button_box.pack_start(apply_btn, True, True, 0)
     button_box.pack_start(close_btn, True, True, 0)
-
     main_box.pack_end(button_box, False, False, 0)
 
     settings_window.add(main_box)
@@ -757,15 +848,20 @@ def show_preview_window(
         action_box.set_halign(Gtk.Align.CENTER)
 
         # Format button
-        format_btn = Gtk.Button.new_from_icon_name(
-            "format-text-bold-symbolic", Gtk.IconSize.BUTTON
+        format_btn = Gtk.Button()
+        format_btn.set_image(
+            Gtk.Image.new_from_icon_name(
+                "format-text-bold-symbolic",
+                Gtk.IconSize.BUTTON,  # type: ignore
+            )
         )
         format_btn.set_tooltip_text("Format text (pretty-print JSON) - Ctrl+B")
         format_btn.connect("clicked", lambda b: _format_text_content(preview_text_view))
 
         # Find button
-        find_btn = Gtk.Button.new_from_icon_name(
-            "edit-find-symbolic", Gtk.IconSize.BUTTON
+        find_btn = Gtk.Button()
+        find_btn.set_image(
+            Gtk.Image.new_from_icon_name("edit-find-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
         )
         find_btn.set_tooltip_text("Find text (Ctrl+F)")
 
@@ -793,20 +889,25 @@ def show_preview_window(
         search_container.pack_start(match_label, False, False, 0)
 
         # Previous button
-        prev_btn = Gtk.Button.new_from_icon_name("go-up-symbolic", Gtk.IconSize.BUTTON)
+        prev_btn = Gtk.Button()
+        prev_btn.set_image(
+            Gtk.Image.new_from_icon_name("go-up-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
+        )
         prev_btn.set_tooltip_text("Previous match (Shift+Enter)")
         search_container.pack_start(prev_btn, False, False, 0)
 
         # Next button
-        next_btn = Gtk.Button.new_from_icon_name(
-            "go-down-symbolic", Gtk.IconSize.BUTTON
+        next_btn = Gtk.Button()
+        next_btn.set_image(
+            Gtk.Image.new_from_icon_name("go-down-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
         )
         next_btn.set_tooltip_text("Next match (Enter)")
         search_container.pack_start(next_btn, False, False, 0)
 
         # Close button
-        close_btn = Gtk.Button.new_from_icon_name(
-            "window-close-symbolic", Gtk.IconSize.BUTTON
+        close_btn = Gtk.Button()
+        close_btn.set_image(
+            Gtk.Image.new_from_icon_name("window-close-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
         )
         close_btn.set_tooltip_text("Close search (Escape)")
         search_container.pack_start(close_btn, False, False, 0)
@@ -832,16 +933,21 @@ def show_preview_window(
         )
 
         # Zoom controls
-        zoom_out = Gtk.Button.new_from_icon_name(
-            "zoom-out-symbolic", Gtk.IconSize.BUTTON
+        zoom_out = Gtk.Button()
+        zoom_out.set_image(
+            Gtk.Image.new_from_icon_name("zoom-out-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
         )
         zoom_out.connect(
             "clicked", lambda b: change_text_size_cb(preview_text_view, -1)
         )
-        zoom_in = Gtk.Button.new_from_icon_name("zoom-in-symbolic", Gtk.IconSize.BUTTON)
+        zoom_in = Gtk.Button()
+        zoom_in.set_image(
+            Gtk.Image.new_from_icon_name("zoom-in-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
+        )
         zoom_in.connect("clicked", lambda b: change_text_size_cb(preview_text_view, 1))
-        zoom_reset = Gtk.Button.new_from_icon_name(
-            "zoom-original-symbolic", Gtk.IconSize.BUTTON
+        zoom_reset = Gtk.Button()
+        zoom_reset.set_image(
+            Gtk.Image.new_from_icon_name("zoom-original-symbolic", Gtk.IconSize.BUTTON)  # type: ignore
         )
         zoom_reset.connect("clicked", lambda b: reset_text_size_cb(preview_text_view))
 
