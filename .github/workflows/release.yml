@@ -160,6 +160,36 @@ jobs:
           name: appimage-x86_64
           path: clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64.AppImage
 
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    needs: generate-changelog
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-venv python3-dev python3-gi python3-gi-cairo \
+            gir1.2-gtk-3.0 libgirepository1.0-dev build-essential \
+            libssl-dev zlib1g-dev patchelf libcairo2-dev pkg-config
+
+      - name: Build
+        run: |
+          set -e
+          python3 -m venv --system-site-packages venv
+          . venv/bin/activate
+          pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
+          make nuitka
+          mv dist/clipse-gui.bin \
+             dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
+          chmod +x dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
+
   update-aur:
     runs-on: ubuntu-latest
     needs: generate-changelog
@@ -221,6 +251,7 @@ jobs:
     needs:
       - generate-changelog
       - build-linux-x86_64
+      - build-linux-arm64
       - build-appimage
       - update-aur
 
@@ -236,4 +267,5 @@ jobs:
           body: ${{ needs.generate-changelog.outputs.release_body }}
           files: |
             artifacts/linux-x86_64/*
+            artifacts/linux-arm64/*
             artifacts/appimage-x86_64/*
