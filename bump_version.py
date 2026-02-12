@@ -85,6 +85,17 @@ def update_makefile(new_version):
     print(f"Updated Makefile desktop entry to version {new_version}")
 
 
+def update_justfile(new_version):
+    """Update version in justfile desktop entry generation"""
+    justfile = Path("justfile")
+    if not justfile.exists():
+        print("Warning: justfile not found, skipping justfile version update")
+        return
+
+    # The justfile dynamically reads from __init__.py, so it should auto-update
+    print("justfile reads version dynamically from source (no update needed)")
+
+
 def interactive_bump():
     """Interactive version bump with user selection"""
     current_version = get_current_version()
@@ -149,6 +160,7 @@ def main():
     # Update files
     update_init_file(new_version)
     update_makefile(new_version)
+    update_justfile(new_version)
 
     print(f"Version successfully bumped to {new_version}")
     print("Don't forget to commit the changes!")
