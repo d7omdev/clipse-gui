@@ -259,6 +259,7 @@ class ClipboardHistoryController:
                     self._update_row_image_widget,
                     self.compact_mode,
                     self.hover_to_select,
+                    self._on_row_single_click,
                 )
                 if row:
                     row.item_index = item_info["original_index"]
@@ -313,7 +314,9 @@ class ClipboardHistoryController:
         # Show selection count if in selection mode
         if self.selection_mode and self.selected_indices:
             selected_count = len(self.selected_indices)
-            status_parts.append(f"{selected_count} item{'s' if selected_count != 1 else ''} selected")
+            status_parts.append(
+                f"{selected_count} item{'s' if selected_count != 1 else ''} selected"
+            )
 
         if self.show_only_pinned:
             status_parts.append(f"Showing {count} pinned items")
@@ -592,12 +595,16 @@ class ClipboardHistoryController:
             # Deselect
             self.selected_indices.remove(original_index)
             context.remove_class("selected-row")
-            log.info(f"Deselected item at index {original_index}, classes: {context.list_classes()}")
+            log.info(
+                f"Deselected item at index {original_index}, classes: {context.list_classes()}"
+            )
         else:
             # Select
             self.selected_indices.add(original_index)
             context.add_class("selected-row")
-            log.info(f"Selected item at index {original_index}, classes: {context.list_classes()}")
+            log.info(
+                f"Selected item at index {original_index}, classes: {context.list_classes()}"
+            )
 
         self.update_status_label()
 
@@ -659,7 +666,9 @@ class ClipboardHistoryController:
 
         if not indices_to_delete:
             if PROTECT_PINNED_ITEMS and pinned_count > 0:
-                self.flash_status(f"Cannot delete: all {pinned_count} selected items are pinned (protection enabled)")
+                self.flash_status(
+                    f"Cannot delete: all {pinned_count} selected items are pinned (protection enabled)"
+                )
             else:
                 self.flash_status("No items to delete")
             return
@@ -679,7 +688,7 @@ class ClipboardHistoryController:
             destroy_with_parent=True,
             message_type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.NONE,
-            text="Confirm Deletion"
+            text="Confirm Deletion",
         )
         dialog.format_secondary_text(message)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -706,7 +715,9 @@ class ClipboardHistoryController:
             self.schedule_save_history()
             self.update_filtered_items()
 
-            self.flash_status(f"Deleted {total_to_delete} item{'s' if total_to_delete != 1 else ''}")
+            self.flash_status(
+                f"Deleted {total_to_delete} item{'s' if total_to_delete != 1 else ''}"
+            )
             log.info(f"Deleted {total_to_delete} selected items")
 
     def clear_all_items(self):
@@ -720,7 +731,9 @@ class ClipboardHistoryController:
         non_pinned_count = len(self.items) - pinned_count
 
         if PROTECT_PINNED_ITEMS and non_pinned_count == 0:
-            self.flash_status(f"Cannot clear: all {pinned_count} items are pinned (protection enabled)")
+            self.flash_status(
+                f"Cannot clear: all {pinned_count} items are pinned (protection enabled)"
+            )
             return
 
         # Determine what will be deleted
@@ -742,7 +755,7 @@ class ClipboardHistoryController:
             destroy_with_parent=True,
             message_type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.NONE,
-            text="Clear All Items"
+            text="Clear All Items",
         )
         dialog.format_secondary_text(message)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -770,7 +783,9 @@ class ClipboardHistoryController:
             self.schedule_save_history()
             self.update_filtered_items()
 
-            self.flash_status(f"Cleared {items_to_delete} item{'s' if items_to_delete != 1 else ''}")
+            self.flash_status(
+                f"Cleared {items_to_delete} item{'s' if items_to_delete != 1 else ''}"
+            )
             log.info(f"Cleared {items_to_delete} items")
 
     def _run_paste_command(self, cmd_args, input_data=None, is_binary=False):
@@ -866,6 +881,8 @@ class ClipboardHistoryController:
             if process.stdin:
                 process.stdin.write(text_value.encode("utf-8"))
                 process.stdin.close()
+                # Wait for process to complete to ensure clipboard is updated
+                process.wait(timeout=5)
             else:
                 log.error("Process stdin is None. Cannot write to clipboard.")
                 self.flash_status("Error: Unable to write to clipboard")
@@ -1046,8 +1063,10 @@ class ClipboardHistoryController:
             # self.window.show()
             # self.flash_status("Paste failed. Check logs/dependencies (xdotool/wtype).")
 
-        # Quit the application shortly after attempting paste
-        GLib.timeout_add(50, self._quit_application)
+        # Quit the application after a longer delay to ensure paste completes
+        # Some applications need more time to receive and process the paste
+        quit_delay = 200  # ms - increased from 50ms for better reliability
+        GLib.timeout_add(quit_delay, self._quit_application)
         return False  # Prevent timer from repeating
 
     def _quit_application(self):
@@ -1612,6 +1631,14 @@ class ClipboardHistoryController:
         """Handles double-click or Enter on a list row."""
         log.debug(f"Row activated: original_index={getattr(row, 'item_index', 'N/A')}")
         self.copy_selected_item_to_clipboard(with_paste_simulation)
+
+    def _on_row_single_click(self, row):
+        """Handles single-click on a list row - copies and pastes."""
+        log.debug(f"Row single-clicked: original_index={getattr(row, 'item_index', 'N/A')}")
+        # Select the row first
+        self.list_box.select_row(row)
+        # Trigger copy with paste simulation
+        self.copy_selected_item_to_clipboard(with_paste_simulation=True)
 
     def on_search_changed(self, entry):
         """Handles changes in the search entry, debounced."""

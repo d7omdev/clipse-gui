@@ -27,6 +27,8 @@ DEFAULT_SETTINGS = {
         "search_debounce_ms": "250",
         "paste_simulation_delay_ms": "150",
         "minimize_to_tray": "True",
+        "tray_items_count": "20",
+        "tray_paste_on_select": "True",
     },
     "Commands": {
         "copy_tool_cmd": "wl-copy",
@@ -78,6 +80,10 @@ PASTE_SIMULATION_DELAY_MS = config.getint(
     "General", "paste_simulation_delay_ms", fallback=150
 )
 MINIMIZE_TO_TRAY = config.getboolean("General", "minimize_to_tray", fallback=True)
+TRAY_ITEMS_COUNT = config.getint("General", "tray_items_count", fallback=20)
+TRAY_PASTE_ON_SELECT = config.getboolean(
+    "General", "tray_paste_on_select", fallback=True
+)
 
 COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
 X11_COPY_TOOL_CMD = config.get(
@@ -229,6 +235,24 @@ frame > box > label {
 
 .pin-icon.unpinned {
     color: alpha(#ffffff, 0.25);
+}
+
+/* Settings window styling */
+.settings-section {
+    border: 1px solid alpha(#ffffff, 0.1);
+    border-radius: 6px;
+    padding: 10px;
+    margin: 5px;
+}
+
+.settings-section > label {
+    color: alpha(#ffffff, 0.9);
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.settings-section frame {
+    background-color: alpha(#ffffff, 0.02);
 }
 """
 log.debug(f"Using configuration directory: {CONFIG_DIR}")
