@@ -190,62 +190,6 @@ jobs:
           name: linux-arm64
           path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
 
-  update-aur:
-    runs-on: ubuntu-latest
-    needs: generate-changelog
-    steps:
-      - name: Checkout AUR repo
-        uses: actions/checkout@v4
-        with:
-          repository: d7omdev/clipse-gui
-          path: aur
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup SSH for AUR
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
-
-      - name: Clone AUR package
-        run: |
-          git clone ssh://aur@aur.archlinux.org/clipse-gui.git aur-package
-
-      - name: Update AUR package version
-        run: |
-          VERSION="${{ needs.generate-changelog.outputs.version }}"
-          cd aur-package
-
-          # Update PKGBUILD version
-          sed -i "s/pkgver=.*/pkgver=$VERSION/" PKGBUILD
-
-          # Update .SRCINFO version
-          sed -i "s/pkgver = .*/pkgver = $VERSION/" .SRCINFO
-
-          # Show changes
-          echo "Updated PKGBUILD:"
-          grep "pkgver=" PKGBUILD
-          echo ""
-          echo "Updated .SRCINFO:"
-          grep "pkgver =" .SRCINFO
-
-      - name: Build and verify AUR package
-        run: |
-          cd aur-package
-          # Validate PKGBUILD
-          makepkg --printsrcinfo > .SRCINFO
-
-      - name: Commit and push to AUR
-        run: |
-          VERSION="${{ needs.generate-changelog.outputs.version }}"
-          cd aur-package
-
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-
-          git add PKGBUILD .SRCINFO
-          git commit -m "Update to v$VERSION"
-          git push origin master
-
   create-release:
     runs-on: ubuntu-latest
     needs:
@@ -253,7 +197,6 @@ jobs:
       - build-linux-x86_64
       - build-linux-arm64
       - build-appimage
-      - update-aur
 
     steps:
       - uses: actions/download-artifact@v4
