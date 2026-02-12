@@ -1,8 +1,12 @@
+nodeenv==1.10.0
 Nuitka==2.6.9
 ordered-set==4.1.0
 pillow==11.2.1
 pycairo==1.27.0
 PyGObject==3.52.3
 PyGObject-stubs==2.13.0
+pyright==1.1.408
+ruff==0.15.0
+typing_extensions==4.15.0
 watchdog==6.0.0
 zstandard==0.23.0

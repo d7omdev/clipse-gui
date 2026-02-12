@@ -20,7 +20,7 @@ class ClipseGuiApplication(Gtk.Application):
 
     def __init__(self):
         super().__init__(
-            application_id=APPLICATION_ID, flags=Gio.ApplicationFlags.FLAGS_NONE
+            application_id=APPLICATION_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS
         )
         self.window = None
         self.controller = None
@@ -58,10 +58,10 @@ class ClipseGuiApplication(Gtk.Application):
                 self.window.set_icon_name("edit-copy")
             except GLib.Error as e:
                 log.warning(f"Could not set window icon name: {e}")
-            
+
             # Setup tray manager
             self.tray_manager = TrayManager(self)
-            
+
             # Connect window events for tray functionality
             self.window.connect("delete-event", self._on_window_delete)
 
@@ -91,7 +91,18 @@ class ClipseGuiApplication(Gtk.Application):
             log.debug("Main window created and shown.")
         else:
             log.debug("Application already active - presenting existing window.")
-            self.window.present()
+            self._restore_window_from_tray()
+
+    def _restore_window_from_tray(self):
+        """Restore and show the window, even if minimized to tray."""
+        if self.window:
+            # Restore from tray if minimized there
+            if self.tray_manager:
+                self.tray_manager._restore_window()
+            else:
+                # Fallback if no tray manager
+                self.window.present()
+                self.window.show_all()
 
     def do_shutdown(self):
         """Called when the application is shutting down."""
@@ -110,7 +121,7 @@ class ClipseGuiApplication(Gtk.Application):
         # Cleanup tray resources
         if self.tray_manager:
             self.tray_manager.cleanup()
-        
+
         Gtk.Application.do_shutdown(self)
 
     def _on_window_delete(self, window, event):

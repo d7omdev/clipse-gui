@@ -62,6 +62,17 @@ lint:
 		ruff check . && pyright; \
 	fi
 
+lint-fix:
+	@echo "Running linting and type checking..."
+	@if [ -d "venv" ]; then \
+		echo "Activating virtual environment..."; \
+		. venv/bin/activate && ruff check . --fix && pyright; \
+	else \
+		echo "No virtual environment found, running directly..."; \
+		ruff check . --fix && pyright; \
+	fi
+
+
 watch:
 	@echo "Starting Clipse GUI in watch mode..."
 	watchmedo auto-restart --directory=. --pattern="*.py" --recursive -- \
@@ -71,7 +82,7 @@ nuitka:
 	@echo "Building standalone app using Nuitka..."
 	$(PYTHON) -m nuitka $(NUITKA_OPTS) $(APP_SCRIPT)
 
-install: nuitka
+install:
 	@echo "Installing $(APP_NAME)..."
 	@sudo install -Dm755 "$(BUILD_DIR)/$(NUITKA_BINARY)" "$(BIN_DIR)/$(APP_NAME)"
 
