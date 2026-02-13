@@ -32,10 +32,10 @@ export ICON_FILE := APP_NAME + ".png"
 
 # Installation paths (configurable via env vars)
 
-export PREFIX := env("PREFIX", "/usr/local")
+export PREFIX := env("PREFIX", "/usr")
 export BIN_DIR := PREFIX / "bin"
 export SHARE_DIR := PREFIX / "share"
-export APP_DIR := SHARE_DIR / APP_NAME
+export APP_DIR := "/opt/" + APP_NAME
 export ICON_DEST_DIR := SHARE_DIR / "icons/hicolor/128x128/apps"
 export ICON_CACHE_DIR := SHARE_DIR / "icons/hicolor"
 export DESKTOP_DEST_DIR := SHARE_DIR / "applications"
@@ -44,11 +44,11 @@ export DESKTOP_DEST_DIR := SHARE_DIR / "applications"
 
 export BUILD_DIR := "dist"
 export NUITKA_DIST_DIR := APP_NAME + ".dist"
-export NUITKA_BINARY := APP_NAME + ".bin"
+export NUITKA_BINARY := APP_NAME
 
-# Python configuration - auto-detects venv
+# Python configuration - auto-detects venv, uses uv to bootstrap Python 3.13 if needed
 
-export PYTHON := if path_exists("venv/bin/python") == "true" { "venv/bin/python" } else if path_exists(".venv/bin/python") == "true" { ".venv/bin/python" } else { env("PYTHON", "python3") }
+export PYTHON := if path_exists("venv/bin/python") == "true" { "venv/bin/python" } else if path_exists(".venv/bin/python") == "true" { ".venv/bin/python" } else if env("NO_UV_BOOTSTRAP", "") == "" { "uv run --python 3.13 --no-project -- python3" } else { env("PYTHON", "python3") }
 
 # Virtual environment activation command (empty if using system python)
 
@@ -56,7 +56,7 @@ export VENV_ACTIVATE := if path_exists("venv/bin/activate") == "true" { "source 
 
 # Nuitka build options
 
-NUITKA_OPTS := "--onefile --output-dir=" + BUILD_DIR + " --remove-output --include-package=" + PACKAGE_DIR + " --include-package=gi --include-package-data=gi --follow-imports --nofollow-import-to=*.tests --assume-yes-for-downloads"
+NUITKA_OPTS := "--onefile --output-dir=" + BUILD_DIR + " --remove-output --include-package=" + PACKAGE_DIR + " --follow-imports --nofollow-import-to=*.tests --assume-yes-for-downloads"
 
 # Current version extracted from source
 
@@ -175,21 +175,44 @@ qa: format lint type-check
 # Build Recipes (group: 'build')
 # ============================================================================
 
+# Ensure Python 3.13 venv exists using uv (downloads Python if needed)
+[group('build')]
+_ensure-python:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PYTHON_VERSION=$(venv/bin/python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "none")
+    if [ ! -d "venv" ] || [ "$PYTHON_VERSION" != "3.13" ]; then
+        echo "{{ YELLOW }}-> Creating venv with Python 3.13 (downloading if needed)...{{ RESET }}"
+        rm -rf venv
+        uv venv --python 3.13 venv
+    fi
+    if ! venv/bin/python -c "import nuitka" 2>/dev/null; then
+        echo "{{ YELLOW }}-> Installing nuitka...{{ RESET }}"
+        uv pip install nuitka --python venv/bin/python
+    fi
+    if ! venv/bin/python -c "import gi" 2>/dev/null; then
+        echo "{{ YELLOW }}-> Installing PyGObject...{{ RESET }}"
+        uv pip install PyGObject --python venv/bin/python
+    fi
+
 # Build standalone binary using Nuitka (group: 'build')
 [group('build')]
-build: clean-build
+build: clean-build _ensure-python
     @echo "{{ BLUE }}-> Building standalone binary with Nuitka...{{ RESET }}"
     @echo "{{ YELLOW }}  This may take a few minutes...{{ RESET }}"
-    {{ VENV_ACTIVATE }}{{ PYTHON }} -m nuitka {{ NUITKA_OPTS }} {{ APP_SCRIPT }}
-    @echo "{{ GREEN }}✓ Build complete: {{ BUILD_DIR }}/{{ NUITKA_BINARY }}{{ RESET }}"
+    venv/bin/python -m nuitka {{ NUITKA_OPTS }} {{ APP_SCRIPT }}
+    @if [ -f "{{ BUILD_DIR }}/{{ APP_NAME }}.bin" ]; then \
+        mv "{{ BUILD_DIR }}/{{ APP_NAME }}.bin" "{{ BUILD_DIR }}/{{ APP_NAME }}"; \
+    fi
+    @echo "{{ GREEN }}✓ Build complete: {{ BUILD_DIR }}/{{ APP_NAME }}{{ RESET }}"
 
 # Build and verify the binary works (group: 'build')
 [group('build')]
 build-verify: build
     @echo "{{ BLUE }}-> Verifying build...{{ RESET }}"
-    @if [ -f "{{ BUILD_DIR }}/{{ NUITKA_BINARY }}" ]; then \
+    @if [ -f "{{ BUILD_DIR }}/{{ APP_NAME }}" ]; then \
         echo "{{ GREEN }}✓ Binary exists and is ready for installation{{ RESET }}"; \
-        ls -lh {{ BUILD_DIR }}/{{ NUITKA_BINARY }}; \
+        ls -lh {{ BUILD_DIR }}/{{ APP_NAME }}; \
     else \
         echo "{{ YELLOW }}✗ Binary not found at expected location{{ RESET }}"; \
         exit 1; \
@@ -204,11 +227,18 @@ build-verify: build
 install: build verify-prefix
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "{{ BLUE }}-> Installing {{ APP_NAME }} v{{ VERSION }} to {{ PREFIX }}...{{ RESET }}"
+    echo "{{ BLUE }}-> Installing {{ APP_NAME }} v{{ VERSION }}...{{ RESET }}"
 
-    # Install binary
-    echo "Installing binary to {{ BIN_DIR }}..."
-    sudo install -Dm755 "{{ BUILD_DIR }}/{{ NUITKA_BINARY }}" "{{ BIN_DIR }}/{{ APP_NAME }}"
+    # Remove old installation and copy new one to /opt
+    echo "Installing to {{ APP_DIR }}..."
+    sudo rm -rf "{{ APP_DIR }}"
+    sudo mkdir -p "{{ APP_DIR }}"
+    sudo cp "{{ BUILD_DIR }}/{{ APP_NAME }}" "{{ APP_DIR }}/{{ APP_NAME }}"
+    sudo chmod +x "{{ APP_DIR }}/{{ APP_NAME }}"
+
+    # Create symlink
+    echo "Creating symlink..."
+    sudo ln -sf "{{ APP_DIR }}/{{ APP_NAME }}" "{{ BIN_DIR }}/{{ APP_NAME }}"
 
     # Install icon if present
     if [ -f "{{ ICON_FILE }}" ]; then
@@ -231,7 +261,7 @@ install: build verify-prefix
     echo "  Run with: {{ BOLD }}{{ APP_NAME }}{{ RESET }} or from your applications menu"
 
 # Uninstall the application [confirm] (group: 'install')
-[confirm("Are you sure you want to uninstall {{APP_NAME}}?")]
+[confirm("Are you sure you want to uninstall clipse-gui?")]
 [group('install')]
 uninstall:
     #!/usr/bin/env bash
@@ -239,6 +269,7 @@ uninstall:
     echo "{{ YELLOW }}-> Uninstalling {{ APP_NAME }}...{{ RESET }}"
 
     sudo rm -f "{{ BIN_DIR }}/{{ APP_NAME }}"
+    sudo rm -rf "{{ APP_DIR }}"
     sudo rm -f "{{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
 
     if [ -f "{{ ICON_DEST_DIR }}/{{ APP_NAME }}.png" ]; then
