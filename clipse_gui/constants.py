@@ -284,10 +284,27 @@ frame > box > label {{
     background-color: alpha(#ffffff, 0.02);
 }}
 
-/* Main window widget styling (not settings dialog) - Use higher specificity */
+/* Remove border from notebook (settings dialog) */
+notebook {{
+    border: none;
+    box-shadow: none;
+}}
+
+notebook header {{
+    border: none;
+    box-shadow: none;
+}}
+
+notebook stack {{
+    border: none;
+    box-shadow: none;
+}}
+
+/* Main window widget styling - use !important to override GTK defaults */
 .main-window button,
-.main-window .text-button {{
-    border-radius: {border_radius}px;
+.main-window .text-button,
+.main-window button.text-button {{
+    border-radius: {border_radius}px !important;
     padding: 6px 12px;
 }}
 
@@ -297,8 +314,9 @@ frame > box > label {{
 }}
 
 .main-window entry,
-.main-window .entry {{
-    border-radius: {border_radius}px;
+.main-window .entry,
+.main-window entry.search {{
+    border-radius: {border_radius}px !important;
     padding: 6px 10px;
 }}
 
@@ -307,17 +325,19 @@ frame > box > label {{
     box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
 }}
 
+/* Switch styling - the slider is the inner part */
 .main-window switch {{
-    border-radius: {border_radius + 10}px;
+    border-radius: {border_radius + 10}px !important;
 }}
 
 .main-window switch slider {{
-    border-radius: {border_radius}px;
+    border-radius: {border_radius}px !important;
     min-height: {border_radius * 2 if border_radius > 0 else 20}px;
 }}
 
-.main-window spinbutton {{
-    border-radius: {border_radius}px;
+.main-window spinbutton,
+.main-window spinbutton.entry {{
+    border-radius: {border_radius}px !important;
 }}
 
 /* Scrollbar styling */
@@ -325,7 +345,7 @@ scrollbar slider {{
     border-radius: {border_radius}px;
 }}
 
-/* List box and row focus/selection styling - use high specificity */
+/* List box and row focus/selection styling */
 .main-window list,
 .main-window listbox {{
     border-radius: 0;
@@ -333,7 +353,7 @@ scrollbar slider {{
 
 .main-window list row,
 .main-window listbox row {{
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: 0 {border_radius}px {border_radius}px 0 !important;
     outline: none;
 }}
 
@@ -341,13 +361,12 @@ scrollbar slider {{
 .main-window listbox row:focus {{
     outline: none;
     box-shadow: inset 0 0 0 2px alpha({selection_color}, 0.4);
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: 0 {border_radius}px {border_radius}px 0 !important;
 }}
 
-/* Ensure selected row has rounded corners */
 .main-window list row:selected,
 .main-window listbox row:selected {{
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: 0 {border_radius}px {border_radius}px 0 !important;
 }}
 """
 
