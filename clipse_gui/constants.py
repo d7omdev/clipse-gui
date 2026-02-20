@@ -23,6 +23,7 @@ DEFAULT_SETTINGS = {
         "compact_mode": "False",
         "protect_pinned_items": "False",
         "hover_to_select": "False",
+        "highlight_search": "True",
         "save_debounce_ms": "300",
         "search_debounce_ms": "250",
         "paste_simulation_delay_ms": "150",
@@ -74,6 +75,7 @@ PROTECT_PINNED_ITEMS = config.getboolean(
     "General", "protect_pinned_items", fallback=False
 )
 HOVER_TO_SELECT = config.getboolean("General", "hover_to_select", fallback=False)
+HIGHLIGHT_SEARCH = config.getboolean("General", "highlight_search", fallback=True)
 SAVE_DEBOUNCE_MS = config.getint("General", "save_debounce_ms", fallback=300)
 SEARCH_DEBOUNCE_MS = config.getint("General", "search_debounce_ms", fallback=250)
 PASTE_SIMULATION_DELAY_MS = config.getint(

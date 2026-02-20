@@ -17,6 +17,7 @@ from .constants import (
     COMPACT_MODE,
     HOVER_TO_SELECT,
     ENTER_TO_PASTE,
+    HIGHLIGHT_SEARCH,
     MINIMIZE_TO_TRAY,
     TRAY_ITEMS_COUNT,
     TRAY_PASTE_ON_SELECT,
@@ -101,6 +102,44 @@ def animate_pin_shake(container, is_pinned):
     apply_wiggle(0)
 
 
+def escape_markup(text):
+    """Escape special characters for Pango markup."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def highlight_search_term(text, search_term):
+    """Highlight search term matches in text using Pango markup."""
+    if not search_term or not search_term.strip():
+        return escape_markup(text)
+    
+    search_lower = search_term.lower()
+    text_lower = text.lower()
+    
+    result = []
+    last_end = 0
+    
+    while True:
+        idx = text_lower.find(search_lower, last_end)
+        if idx == -1:
+            break
+        
+        # Add text before match
+        if idx > last_end:
+            result.append(escape_markup(text[last_end:idx]))
+        
+        # Add highlighted match with inline background color
+        match = text[idx:idx + len(search_term)]
+        result.append(f'<span bgcolor="#ffcc00" fgcolor="#000000">{escape_markup(match)}</span>')
+        
+        last_end = idx + len(search_term)
+    
+    # Add remaining text
+    if last_end < len(text):
+        result.append(escape_markup(text[last_end:]))
+    
+    return "".join(result)
+
+
 def create_list_row_widget(
     item_info,
     image_handler,
@@ -108,6 +147,8 @@ def create_list_row_widget(
     compact_mode=False,
     hover_to_select=False,
     single_click_callback=None,
+    search_term="",
+    highlight_search=False,
 ):
     """Creates a Gtk.ListBoxRow widget for a clipboard item."""
     original_index = item_info["original_index"]
@@ -198,7 +239,14 @@ def create_list_row_widget(
                 cutoff = last_space
             display_text = display_text[:cutoff] + "..."
 
-        label = Gtk.Label(label=display_text)
+        label = Gtk.Label()
+        # Apply search highlighting if enabled
+        if highlight_search and search_term:
+            marked_up = highlight_search_term(display_text, search_term)
+            label.set_markup(marked_up)
+        else:
+            label.set_text(display_text)
+        
         label.set_line_wrap(True)
         label.set_line_wrap_mode(Pango.WrapMode.WORD)
         label.set_xalign(0)
@@ -514,9 +562,19 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
         "Press Enter to paste the selected item and close the window",
     )
 
+    # Highlight Search setting
+    highlight_search_switch = Gtk.Switch()
+    highlight_search_switch.set_active(HIGHLIGHT_SEARCH)
+    highlight_search_box = _create_setting_row(
+        "Highlight search:",
+        highlight_search_switch,
+        "Highlight matching search terms in the results list",
+    )
+
     general_box.pack_start(compact_box, False, False, 0)
     general_box.pack_start(hover_box, False, False, 0)
     general_box.pack_start(enter_paste_box, False, False, 0)
+    general_box.pack_start(highlight_search_box, False, False, 0)
     general_frame.add(general_box)
     content_box.pack_start(general_frame, False, False, 0)
 
@@ -648,6 +706,18 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
         constants.ENTER_TO_PASTE = switch.get_active()
 
+    def on_highlight_search_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "highlight_search", str(switch.get_active()))
+        config._save_config()
+        import clipse_gui.constants as constants
+
+        constants.HIGHLIGHT_SEARCH = switch.get_active()
+
     def on_tray_switch_toggled(switch, state):
         nonlocal settings_changed
         settings_changed = True
@@ -695,6 +765,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     compact_switch.connect("state-set", on_compact_switch_toggled)
     hover_switch.connect("state-set", on_hover_switch_toggled)
     enter_paste_switch.connect("state-set", on_enter_paste_switch_toggled)
+    highlight_search_switch.connect("state-set", on_highlight_search_switch_toggled)
     tray_switch.connect("state-set", on_tray_switch_toggled)
     tray_items_spin.connect("value-changed", on_tray_items_changed)
     tray_paste_switch.connect("state-set", on_tray_paste_switch_toggled)

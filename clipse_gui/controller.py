@@ -8,6 +8,7 @@ import mimetypes
 from .constants import (
     APP_CSS,
     ENTER_TO_PASTE,
+    HIGHLIGHT_SEARCH,
     HOVER_TO_SELECT,
     IMAGE_CACHE_MAX_SIZE,
     INITIAL_LOAD_COUNT,
@@ -260,6 +261,8 @@ class ClipboardHistoryController:
                     self.compact_mode,
                     self.hover_to_select,
                     self._on_row_single_click,
+                    self.search_term,
+                    HIGHLIGHT_SEARCH,
                 )
                 if row:
                     row.item_index = item_info["original_index"]
