@@ -300,11 +300,11 @@ notebook stack {{
     box-shadow: none;
 }}
 
-/* Main window widget styling - use !important to override GTK defaults */
+/* Main window widget styling - use to override GTK defaults */
 .main-window button,
 .main-window .text-button,
 .main-window button.text-button {{
-    border-radius: {border_radius}px !important;
+    border-radius: {border_radius}px;
     padding: 6px 12px;
 }}
 
@@ -316,7 +316,7 @@ notebook stack {{
 .main-window entry,
 .main-window .entry,
 .main-window entry.search {{
-    border-radius: {border_radius}px !important;
+    border-radius: {border_radius}px;
     padding: 6px 10px;
 }}
 
@@ -327,17 +327,17 @@ notebook stack {{
 
 /* Switch styling - the slider is the inner part */
 .main-window switch {{
-    border-radius: {border_radius + 10}px !important;
+    border-radius: {border_radius + 10}px;
 }}
 
 .main-window switch slider {{
-    border-radius: {border_radius}px !important;
+    border-radius: {border_radius}px;
     min-height: {border_radius * 2 if border_radius > 0 else 20}px;
 }}
 
 .main-window spinbutton,
 .main-window spinbutton.entry {{
-    border-radius: {border_radius}px !important;
+    border-radius: {border_radius}px;
 }}
 
 /* Scrollbar styling */
@@ -353,7 +353,7 @@ scrollbar slider {{
 
 .main-window list row,
 .main-window listbox row {{
-    border-radius: 0 {border_radius}px {border_radius}px 0 !important;
+    border-radius: 0 {border_radius}px {border_radius}px 0;
     outline: none;
 }}
 
@@ -361,12 +361,12 @@ scrollbar slider {{
 .main-window listbox row:focus {{
     outline: none;
     box-shadow: inset 0 0 0 2px alpha({selection_color}, 0.4);
-    border-radius: 0 {border_radius}px {border_radius}px 0 !important;
+    border-radius: 0 {border_radius}px {border_radius}px 0;
 }}
 
 .main-window list row:selected,
 .main-window listbox row:selected {{
-    border-radius: 0 {border_radius}px {border_radius}px 0 !important;
+    border-radius: 0 {border_radius}px {border_radius}px 0;
 }}
 """
 
