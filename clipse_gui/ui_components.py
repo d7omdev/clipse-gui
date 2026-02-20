@@ -18,6 +18,10 @@ from .constants import (
     HOVER_TO_SELECT,
     ENTER_TO_PASTE,
     HIGHLIGHT_SEARCH,
+    BORDER_RADIUS,
+    ACCENT_COLOR,
+    SELECTION_COLOR,
+    VISUAL_MODE_COLOR,
     MINIMIZE_TO_TRAY,
     TRAY_ITEMS_COUNT,
     TRAY_PASTE_ON_SELECT,
@@ -502,13 +506,14 @@ def _create_setting_row(label_text, widget, tooltip=None):
     return box
 
 
-def show_settings_window(parent_window, close_cb, restart_app_cb=None):
+def show_settings_window(parent_window, close_cb, restart_app_cb=None, 
+                         update_style_cb=None, style_defaults=None):
     """Creates and shows the enhanced settings window with sections."""
     settings_window = Gtk.Window(title="Settings")
     settings_window.set_type_hint(Gdk.WindowTypeHint.DIALOG)
     settings_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
     settings_window.set_transient_for(parent_window)
-    settings_window.set_default_size(450, 500)
+    settings_window.set_default_size(500, 550)
     settings_window.set_border_width(15)
 
     main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -520,16 +525,18 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     header.set_margin_bottom(10)
     main_box.pack_start(header, False, False, 0)
 
-    # Scrollable content area
-    scrolled = Gtk.ScrolledWindow()
-    scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-    scrolled.set_vexpand(True)
+    # Create notebook for tabs
+    notebook = Gtk.Notebook()
+    notebook.set_vexpand(True)
 
-    # Content box for all sections
-    content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-    content_box.set_margin_bottom(10)
+    # ============ GENERAL TAB ============
+    general_tab = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    general_tab.set_margin_top(10)
+    general_tab.set_margin_bottom(10)
+    general_tab.set_margin_start(10)
+    general_tab.set_margin_end(10)
 
-    # ============ GENERAL SECTION ============
+    # General Section
     general_frame = _create_section_frame("General")
     general_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
     general_box.set_margin_top(10)
@@ -576,7 +583,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     general_box.pack_start(enter_paste_box, False, False, 0)
     general_box.pack_start(highlight_search_box, False, False, 0)
     general_frame.add(general_box)
-    content_box.pack_start(general_frame, False, False, 0)
+    general_tab.pack_start(general_frame, False, False, 0)
 
     # ============ CLIPBOARD SECTION ============
     clipboard_frame = _create_section_frame("Clipboard")
@@ -595,7 +602,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
     clipboard_box.pack_start(protect_box, False, False, 0)
     clipboard_frame.add(clipboard_box)
-    content_box.pack_start(clipboard_frame, False, False, 0)
+    general_tab.pack_start(clipboard_frame, False, False, 0)
 
     # ============ SYSTEM TRAY SECTION ============
     tray_frame = _create_section_frame("System Tray")
@@ -634,10 +641,105 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     tray_box.pack_start(tray_items_box, False, False, 0)
     tray_box.pack_start(tray_paste_box, False, False, 0)
     tray_frame.add(tray_box)
-    content_box.pack_start(tray_frame, False, False, 0)
+    general_tab.pack_start(tray_frame, False, False, 0)
 
-    scrolled.add(content_box)
-    main_box.pack_start(scrolled, True, True, 0)
+    # Add General tab to notebook
+    general_scroll = Gtk.ScrolledWindow()
+    general_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    general_scroll.add(general_tab)
+    notebook.append_page(general_scroll, Gtk.Label(label="General"))
+
+    # ============ STYLE TAB ============
+    style_tab = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+    style_tab.set_margin_top(10)
+    style_tab.set_margin_bottom(10)
+    style_tab.set_margin_start(10)
+    style_tab.set_margin_end(10)
+
+    # Appearance Section
+    appearance_frame = _create_section_frame("Appearance")
+    appearance_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+    appearance_box.set_margin_top(10)
+    appearance_box.set_margin_bottom(10)
+
+    # Border Radius
+    radius_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    radius_box.set_margin_start(10)
+    radius_box.set_margin_end(10)
+    radius_label = Gtk.Label(label="Border radius:")
+    radius_label.set_halign(Gtk.Align.START)
+    radius_label.set_hexpand(True)
+    radius_spin = Gtk.SpinButton.new_with_range(0, 20, 1)
+    radius_spin.set_value(BORDER_RADIUS)
+    radius_box.pack_start(radius_label, True, True, 0)
+    radius_box.pack_start(radius_spin, False, False, 0)
+    appearance_box.pack_start(radius_box, False, False, 0)
+
+    # Accent Color
+    accent_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    accent_box.set_margin_start(10)
+    accent_box.set_margin_end(10)
+    accent_label = Gtk.Label(label="Accent color (pins):")
+    accent_label.set_halign(Gtk.Align.START)
+    accent_label.set_hexpand(True)
+    accent_button = Gtk.ColorButton()
+    accent_rgba = Gdk.RGBA()
+    accent_rgba.parse(ACCENT_COLOR)
+    accent_button.set_rgba(accent_rgba)
+    accent_box.pack_start(accent_label, True, True, 0)
+    accent_box.pack_start(accent_button, False, False, 0)
+    appearance_box.pack_start(accent_box, False, False, 0)
+
+    # Selection Color
+    selection_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    selection_box.set_margin_start(10)
+    selection_box.set_margin_end(10)
+    selection_label = Gtk.Label(label="Selection color:")
+    selection_label.set_halign(Gtk.Align.START)
+    selection_label.set_hexpand(True)
+    selection_button = Gtk.ColorButton()
+    selection_rgba = Gdk.RGBA()
+    selection_rgba.parse(SELECTION_COLOR)
+    selection_button.set_rgba(selection_rgba)
+    selection_box.pack_start(selection_label, True, True, 0)
+    selection_box.pack_start(selection_button, False, False, 0)
+    appearance_box.pack_start(selection_box, False, False, 0)
+
+    # Visual Mode Color
+    visual_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    visual_box.set_margin_start(10)
+    visual_box.set_margin_end(10)
+    visual_label = Gtk.Label(label="Visual mode color:")
+    visual_label.set_halign(Gtk.Align.START)
+    visual_label.set_hexpand(True)
+    visual_button = Gtk.ColorButton()
+    visual_rgba = Gdk.RGBA()
+    visual_rgba.parse(VISUAL_MODE_COLOR)
+    visual_button.set_rgba(visual_rgba)
+    visual_box.pack_start(visual_label, True, True, 0)
+    visual_box.pack_start(visual_button, False, False, 0)
+    appearance_box.pack_start(visual_box, False, False, 0)
+
+    # Reset button
+    reset_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    reset_box.set_margin_top(15)
+    reset_box.set_margin_start(10)
+    reset_box.set_margin_end(10)
+    reset_btn = Gtk.Button(label="Reset to Defaults")
+    reset_btn.set_tooltip_text("Reset all style settings to default values")
+    reset_box.pack_start(reset_btn, True, True, 0)
+    appearance_box.pack_start(reset_box, False, False, 0)
+
+    appearance_frame.add(appearance_box)
+    style_tab.pack_start(appearance_frame, False, False, 0)
+
+    # Add Style tab to notebook
+    style_scroll = Gtk.ScrolledWindow()
+    style_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    style_scroll.add(style_tab)
+    notebook.append_page(style_scroll, Gtk.Label(label="Style"))
+
+    main_box.pack_start(notebook, True, True, 0)
 
     # Track changes
     settings_changed = False
@@ -760,6 +862,106 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
 
         constants.TRAY_PASTE_ON_SELECT = switch.get_active()
 
+    # Style signal handlers
+    def on_radius_changed(spin):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        value = int(spin.get_value())
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        config.config.set("Style", "border_radius", str(value))
+        config._save_config()
+        import clipse_gui.constants as constants
+        constants.BORDER_RADIUS = value
+        if update_style_cb:
+            update_style_cb(border_radius=value)
+
+    def on_accent_color_changed(button):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        rgba = button.get_rgba()
+        color = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        config.config.set("Style", "accent_color", color)
+        config._save_config()
+        import clipse_gui.constants as constants
+        constants.ACCENT_COLOR = color
+        if update_style_cb:
+            update_style_cb(accent_color=color)
+
+    def on_selection_color_changed(button):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        rgba = button.get_rgba()
+        color = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        config.config.set("Style", "selection_color", color)
+        config._save_config()
+        import clipse_gui.constants as constants
+        constants.SELECTION_COLOR = color
+        if update_style_cb:
+            update_style_cb(selection_color=color)
+
+    def on_visual_color_changed(button):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        rgba = button.get_rgba()
+        color = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        config.config.set("Style", "visual_mode_color", color)
+        config._save_config()
+        import clipse_gui.constants as constants
+        constants.VISUAL_MODE_COLOR = color
+        if update_style_cb:
+            update_style_cb(visual_mode_color=color)
+
+    def on_reset_styles(button):
+        if not style_defaults:
+            return
+        # Reset to defaults
+        radius_spin.set_value(style_defaults.get("border_radius", 6))
+        
+        accent_rgba = Gdk.RGBA()
+        accent_rgba.parse(style_defaults.get("accent_color", "#ffcc00"))
+        accent_button.set_rgba(accent_rgba)
+        
+        selection_rgba = Gdk.RGBA()
+        selection_rgba.parse(style_defaults.get("selection_color", "#4a90e2"))
+        selection_button.set_rgba(selection_rgba)
+        
+        visual_rgba = Gdk.RGBA()
+        visual_rgba.parse(style_defaults.get("visual_mode_color", "#9b59b6"))
+        visual_button.set_rgba(visual_rgba)
+        
+        # Save defaults to config
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        for key, value in style_defaults.items():
+            config.config.set("Style", key, str(value))
+        config._save_config()
+        
+        # Update constants and apply
+        import clipse_gui.constants as constants
+        constants.BORDER_RADIUS = style_defaults.get("border_radius", 6)
+        constants.ACCENT_COLOR = style_defaults.get("accent_color", "#ffcc00")
+        constants.SELECTION_COLOR = style_defaults.get("selection_color", "#4a90e2")
+        constants.VISUAL_MODE_COLOR = style_defaults.get("visual_mode_color", "#9b59b6")
+        
+        if update_style_cb:
+            update_style_cb(
+                border_radius=constants.BORDER_RADIUS,
+                accent_color=constants.ACCENT_COLOR,
+                selection_color=constants.SELECTION_COLOR,
+                visual_mode_color=constants.VISUAL_MODE_COLOR,
+            )
+
     # Connect signals
     protect_switch.connect("state-set", on_protect_switch_toggled)
     compact_switch.connect("state-set", on_compact_switch_toggled)
@@ -769,6 +971,13 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None):
     tray_switch.connect("state-set", on_tray_switch_toggled)
     tray_items_spin.connect("value-changed", on_tray_items_changed)
     tray_paste_switch.connect("state-set", on_tray_paste_switch_toggled)
+    
+    # Style signals
+    radius_spin.connect("value-changed", on_radius_changed)
+    accent_button.connect("color-set", on_accent_color_changed)
+    selection_button.connect("color-set", on_selection_color_changed)
+    visual_button.connect("color-set", on_visual_color_changed)
+    reset_btn.connect("clicked", on_reset_styles)
 
     def on_apply_clicked(button):
         settings_window.destroy()

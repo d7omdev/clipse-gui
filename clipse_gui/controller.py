@@ -6,7 +6,6 @@ import threading
 from functools import partial
 import mimetypes
 from .constants import (
-    APP_CSS,
     ENTER_TO_PASTE,
     HIGHLIGHT_SEARCH,
     HOVER_TO_SELECT,
@@ -25,6 +24,7 @@ from .constants import (
     DEFAULT_WINDOW_WIDTH,
     DEFAULT_WINDOW_HEIGHT,
     config,
+    get_app_css,
 )
 from .data_manager import DataManager
 from .image_handler import ImageHandler
@@ -72,6 +72,7 @@ class ClipboardHistoryController:
 
         ui_elements = build_main_window_content()
         self.main_box = ui_elements["main_box"]
+        self.main_box.get_style_context().add_class("main-window")
         self.search_entry = ui_elements["search_entry"]
         self.pin_filter_button = ui_elements["pin_filter_button"]
         self.compact_mode_button = ui_elements["compact_mode_button"]
@@ -137,7 +138,8 @@ class ClipboardHistoryController:
             log.debug("Creating and adding application CSS provider.")
             self.style_provider = Gtk.CssProvider()
             try:
-                self.style_provider.load_from_data(APP_CSS.encode())
+                css = self._get_current_css()
+                self.style_provider.load_from_data(css.encode())
                 Gtk.StyleContext.add_provider_for_screen(
                     screen,
                     self.style_provider,
@@ -148,7 +150,80 @@ class ClipboardHistoryController:
             except Exception as e:
                 log.error(f"Unexpected error applying CSS: {e}")
         else:
-            log.debug("CSS provider already exists.")
+            # Provider exists, reload CSS with current settings
+            try:
+                css = self._get_current_css()
+                self.style_provider.load_from_data(css.encode())
+                log.debug("CSS reloaded with current settings")
+            except Exception as e:
+                log.error(f"Failed to reload CSS: {e}")
+
+    def _get_current_css(self):
+        """Get current CSS with applied style settings."""
+        import clipse_gui.constants as constants
+        css = get_app_css(
+            border_radius=constants.BORDER_RADIUS,
+            accent_color=constants.ACCENT_COLOR,
+            selection_color=constants.SELECTION_COLOR,
+            visual_mode_color=constants.VISUAL_MODE_COLOR,
+        )
+        log.debug(f"Generated CSS with border_radius={constants.BORDER_RADIUS}")
+        return css
+
+    def update_style_css(self, border_radius=None, accent_color=None, 
+                         selection_color=None, visual_mode_color=None):
+        """Update CSS styles on-the-fly."""
+        # Update global constants
+        import clipse_gui.constants as constants
+        
+        if border_radius is not None:
+            constants.BORDER_RADIUS = border_radius
+        if accent_color is not None:
+            constants.ACCENT_COLOR = accent_color
+        if selection_color is not None:
+            constants.SELECTION_COLOR = selection_color
+        if visual_mode_color is not None:
+            constants.VISUAL_MODE_COLOR = visual_mode_color
+        
+        # Regenerate and apply CSS
+        if hasattr(self, "style_provider"):
+            try:
+                css = self._get_current_css()
+                screen = Gdk.Screen.get_default()
+                
+                # Remove old provider
+                if screen:
+                    Gtk.StyleContext.remove_provider_for_screen(
+                        screen, self.style_provider
+                    )
+                
+                # Create new provider with updated CSS
+                self.style_provider = Gtk.CssProvider()
+                self.style_provider.load_from_data(css.encode())
+                
+                if screen:
+                    Gtk.StyleContext.add_provider_for_screen(
+                        screen,
+                        self.style_provider,
+                        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+                    )
+                
+                log.debug("CSS reloaded successfully")
+                
+                # Force window refresh
+                if self.window:
+                    self.window.queue_draw()
+                    self._invalidate_style_contexts(self.window)
+            except Exception as e:
+                log.error(f"Failed to update CSS: {e}")
+
+    def _invalidate_style_contexts(self, widget):
+        """Recursively invalidate style contexts to force CSS reload."""
+        if hasattr(widget, 'get_style_context'):
+            widget.get_style_context().invalidate()
+        if hasattr(widget, 'get_children'):
+            for child in widget.get_children():
+                self._invalidate_style_contexts(child)
 
     def _on_history_updated(self, loaded_items):
         """Callback function called when the file watcher detects a change."""
@@ -380,7 +455,7 @@ class ClipboardHistoryController:
         try:
             if not hasattr(self, "style_provider"):
                 self._apply_css()
-            base_css = APP_CSS.encode() if isinstance(APP_CSS, str) else APP_CSS
+            base_css = self._get_current_css().encode()
             self.style_provider.load_from_data(base_css + b"\n" + zoom_css)
             log.debug(f"Zoom updated to {self.zoom_level:.2f}")
         except GLib.Error as e:
@@ -1609,8 +1684,18 @@ class ClipboardHistoryController:
             show_help_window(self.window, self.on_help_window_close)
             return True
         if ctrl and keyval == Gdk.KEY_comma:
+            style_defaults = {
+                "border_radius": 6,
+                "accent_color": "#ffcc00",
+                "selection_color": "#4a90e2",
+                "visual_mode_color": "#9b59b6",
+            }
             show_settings_window(
-                self.window, self.on_settings_window_close, self.restart_application
+                self.window, 
+                self.on_settings_window_close, 
+                self.restart_application,
+                update_style_cb=self.update_style_css,
+                style_defaults=style_defaults,
             )
             return True
         if keyval == Gdk.KEY_Tab:

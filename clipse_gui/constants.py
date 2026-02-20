@@ -31,6 +31,15 @@ DEFAULT_SETTINGS = {
         "tray_items_count": "20",
         "tray_paste_on_select": "True",
     },
+    "Style": {
+        "border_radius": "6",
+        "accent_color": "#ffcc00",
+        "selection_color": "#4a90e2",
+        "selection_bg_color": "#4a90e2",
+        "hover_color": "#4a90e2",
+        "hover_bg_color": "#4a90e2",
+        "visual_mode_color": "#9b59b6",
+    },
     "Commands": {
         "copy_tool_cmd": "wl-copy",
         "x11_copy_tool_cmd": "xclip -i -selection clipboard",
@@ -87,6 +96,15 @@ TRAY_PASTE_ON_SELECT = config.getboolean(
     "General", "tray_paste_on_select", fallback=True
 )
 
+# Style settings
+BORDER_RADIUS = config.getint("Style", "border_radius", fallback=6)
+ACCENT_COLOR = config.get("Style", "accent_color", fallback="#ffcc00")
+SELECTION_COLOR = config.get("Style", "selection_color", fallback="#4a90e2")
+SELECTION_BG_COLOR = config.get("Style", "selection_bg_color", fallback="#4a90e2")
+HOVER_COLOR = config.get("Style", "hover_color", fallback="#4a90e2")
+HOVER_BG_COLOR = config.get("Style", "hover_bg_color", fallback="#4a90e2")
+VISUAL_MODE_COLOR = config.get("Style", "visual_mode_color", fallback="#9b59b6")
+
 COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
 X11_COPY_TOOL_CMD = config.get(
     "Commands", "x11_copy_tool_cmd", fallback="xclip -i -selection clipboard"
@@ -129,134 +147,213 @@ LOAD_THRESHOLD_FACTOR = config.getfloat(
 IMAGE_CACHE_MAX_SIZE = config.getint("Performance", "image_cache_max_size", fallback=50)
 
 # CSS Styles
-APP_CSS = """
-.pinned-row {
-    border-left: 3px solid #ffcc00;
-    background-color: alpha(#ffcc00, 0.01);
+def get_app_css(
+    border_radius=6,
+    accent_color="#ffcc00",
+    selection_color="#4a90e2",
+    visual_mode_color="#9b59b6",
+):
+    """Generate app CSS with customizable style variables."""
+    return f"""
+.pinned-row {{
+    border-left: 3px solid {accent_color};
+    background-color: alpha({accent_color}, 0.01);
     font-weight: 500;
-}
-.list-row {
+    border-radius: 0 {border_radius}px {border_radius}px 0;
+}}
+.list-row {{
     padding: 8px 12px;
     margin-top: 1px;
     margin-bottom: 1px;
     border-left: 3px solid transparent;
+    border-radius: 0 {border_radius}px {border_radius}px 0;
     transition: background-color 0.2s ease,
                 border-left-color 0.2s ease;
-}
-.list-row:hover {
-    background-color: alpha(#4a90e2, 0.07);
-    border-left-color: alpha(#4a90e2, 0.45);
-}
-.list-row:selected {
-    background-color: alpha(#4a90e2, 0.13);
-    border-left-color: #4a90e2;
-}
+}}
+.list-row:hover {{
+    background-color: alpha({selection_color}, 0.07);
+    border-left-color: alpha({selection_color}, 0.45);
+}}
+.list-row:selected {{
+    background-color: alpha({selection_color}, 0.13);
+    border-left-color: {selection_color};
+}}
 
 /* Visual mode selection */
-.visual-mode-indicator {
-    background-color: #7a3d8f;
+.visual-mode-indicator {{
+    background-color: {visual_mode_color};
     padding-right: 4px;
     padding-left: 4px;
-    border-radius: 4px;
+    border-radius: {max(2, border_radius - 2)}px;
 
-}
+}}
 
-.list-row.selected-row {
-    background-color: alpha(#9b59b6, 0.15);
-    border-left-color: #9b59b6;
-}
-.list-row.selected-row:hover {
-    background-color: alpha(#9b59b6, 0.2);
-    border-left-color: #9b59b6;
-}
+.list-row.selected-row {{
+    background-color: alpha({visual_mode_color}, 0.15);
+    border-left-color: {visual_mode_color};
+}}
+.list-row.selected-row:hover {{
+    background-color: alpha({visual_mode_color}, 0.2);
+    border-left-color: {visual_mode_color};
+}}
 
 /* Pinned + visual mode selected */
-.pinned-row.selected-row {
-    background-color: alpha(#ffcc00, 0.14);
-    border-left-color: #ffcc00;
-}
+.pinned-row.selected-row {{
+    background-color: alpha({accent_color}, 0.14);
+    border-left-color: {accent_color};
+}}
 
-.pinned-row:hover {
-    background-color: alpha(#ffcc00, 0.08);
-    border-left-color: alpha(#ffcc00, 0.7);
-}
-.pinned-row:selected {
-    background-color: alpha(#ffcc00, 0.12);
-    border-left-color: #ffcc00;
-}
-.timestamp {
+.pinned-row:hover {{
+    background-color: alpha({accent_color}, 0.08);
+    border-left-color: alpha({accent_color}, 0.7);
+}}
+.pinned-row:selected {{
+    background-color: alpha({accent_color}, 0.12);
+    border-left-color: {accent_color};
+}}
+.timestamp {{
     font-size: 82%;
     color: alpha(#ffffff, 0.35);
     font-style: italic;
     margin-top: 2px;
-}
-.status-label {
+}}
+.status-label {{
     border-top: 1px solid alpha(#ffffff, 0.07);
     padding-top: 5px;
     margin-top: 5px;
     color: alpha(#ffffff, 0.4);
     font-style: italic;
     font-size: 90%;
-}
-textview {
+}}
+textview {{
     font-family: Monospace;
-}
-.key-shortcut {
+}}
+.key-shortcut {{
     font-family: Monospace;
     font-weight: bold;
     font-size: 88%;
     background-color: alpha(#ffffff, 0.07);
     color: alpha(#ffffff, 0.75);
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: {border_radius}px;
     border: 1px solid alpha(#ffffff, 0.12);
-}
+}}
 
 /* Help window section styling */
-frame > box {
+frame > box {{
     background-color: alpha(#ffffff, 0.02);
-    border-radius: 6px;
+    border-radius: {border_radius}px;
     padding: 10px;
     border: 1px solid alpha(#ffffff, 0.05);
-}
+}}
 
-frame > box > label {
+frame > box > label {{
     color: alpha(#ffffff, 0.85);
-}
+}}
 
 /* Pin icon styling */
-.pin-icon {
+.pin-icon {{
     transition: all 0.2s ease;
     min-width: 20px;
     min-height: 20px;
-}
+}}
 
-.pin-icon.pinned {
-    color: #ffcc00;
-}
+.pin-icon.pinned {{
+    color: {accent_color};
+}}
 
-.pin-icon.unpinned {
+.pin-icon.unpinned {{
     color: alpha(#ffffff, 0.25);
-}
+}}
 
 /* Settings window styling */
-.settings-section {
+.settings-section {{
     border: 1px solid alpha(#ffffff, 0.1);
-    border-radius: 6px;
+    border-radius: {border_radius}px;
     padding: 10px;
     margin: 5px;
-}
+}}
 
-.settings-section > label {
+.settings-section > label {{
     color: alpha(#ffffff, 0.9);
     font-weight: bold;
     margin-bottom: 5px;
-}
+}}
 
-.settings-section frame {
+.settings-section frame {{
     background-color: alpha(#ffffff, 0.02);
-}
+}}
+
+/* Main window widget styling (not settings dialog) - Use higher specificity */
+.main-window button,
+.main-window .text-button {{
+    border-radius: {border_radius}px;
+    padding: 6px 12px;
+}}
+
+.main-window button:focus {{
+    outline: none;
+    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+}}
+
+.main-window entry,
+.main-window .entry {{
+    border-radius: {border_radius}px;
+    padding: 6px 10px;
+}}
+
+.main-window entry:focus {{
+    outline: none;
+    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+}}
+
+.main-window switch {{
+    border-radius: {border_radius + 10}px;
+}}
+
+.main-window switch slider {{
+    border-radius: {border_radius}px;
+    min-height: {border_radius * 2 if border_radius > 0 else 20}px;
+}}
+
+.main-window spinbutton {{
+    border-radius: {border_radius}px;
+}}
+
+/* Scrollbar styling */
+scrollbar slider {{
+    border-radius: {border_radius}px;
+}}
+
+/* List box and row focus/selection styling - use high specificity */
+.main-window list,
+.main-window listbox {{
+    border-radius: 0;
+}}
+
+.main-window list row,
+.main-window listbox row {{
+    border-radius: 0 {border_radius}px {border_radius}px 0;
+    outline: none;
+}}
+
+.main-window list row:focus,
+.main-window listbox row:focus {{
+    outline: none;
+    box-shadow: inset 0 0 0 2px alpha({selection_color}, 0.4);
+    border-radius: 0 {border_radius}px {border_radius}px 0;
+}}
+
+/* Ensure selected row has rounded corners */
+.main-window list row:selected,
+.main-window listbox row:selected {{
+    border-radius: 0 {border_radius}px {border_radius}px 0;
+}}
 """
+
+
+# Default CSS (for backwards compatibility)
+APP_CSS = get_app_css()
 log.debug(f"Using configuration directory: {CONFIG_DIR}")
 log.debug(f"Using configuration file: {CONFIG_FILE_PATH}")
 log.debug(f"History file path set to: {HISTORY_FILE_PATH}")
