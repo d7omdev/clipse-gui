@@ -1416,28 +1416,29 @@ class ClipboardHistoryController:
 
         if self.search_entry.has_focus():
             if keyval == Gdk.KEY_Escape:
-                # Priority order: exit selection mode -> clear search -> quit
+                # Priority order: exit selection mode -> clear search + unfocus
                 if self.selection_mode:
                     self.toggle_selection_mode()
                     return True
-                elif self.search_entry.get_text():
+                
+                # Clear search text if present
+                if self.search_entry.get_text():
                     self.search_entry.set_text("")
-                else:
-                    app = self.window.get_application()
-                    if app:
-                        # Try to minimize to tray if enabled, otherwise quit
-                        from . import constants
-
-                        if (
-                            hasattr(app, "tray_manager")
-                            and app.tray_manager
-                            and constants.MINIMIZE_TO_TRAY
-                        ):
-                            if app.tray_manager.minimize_to_tray():
-                                return True  # Successfully minimized to tray
-                        app.quit()
+                
+                # Unfocus search entry and focus first list item (deferred)
+                def unfocus_search():
+                    if self.list_box:
+                        # Select and focus first row
+                        first_row = self.list_box.get_row_at_index(0)
+                        if first_row:
+                            self.list_box.select_row(first_row)
+                            first_row.grab_focus()
+                        else:
+                            self.list_box.grab_focus()
                     else:
-                        log.warning("Application instance is None. Cannot quit.")
+                        self.window.grab_focus()
+                    return False
+                GLib.idle_add(unfocus_search)
                 return True
 
             if keyval in [Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down]:
@@ -1487,6 +1488,41 @@ class ClipboardHistoryController:
                     return True
 
                 return False
+
+            # When search entry has focus, insert bound keys as text instead of
+            # triggering their global actions. Let all other keys pass through normally.
+            key_to_char = {
+                Gdk.KEY_v: "v",
+                Gdk.KEY_x: "x",
+                Gdk.KEY_p: "p",
+                Gdk.KEY_j: "j",
+                Gdk.KEY_k: "k",
+                Gdk.KEY_f: "f",
+                Gdk.KEY_slash: "/",
+                Gdk.KEY_question: "?",
+                Gdk.KEY_space: " ",
+            }
+
+            if keyval in key_to_char:
+                # Insert the character into the search entry
+                char = key_to_char[keyval]
+                current_text = self.search_entry.get_text()
+                # Get cursor position (if available) or append to end
+                if hasattr(self.search_entry, 'get_position'):
+                    pos = self.search_entry.get_position()
+                    new_text = current_text[:pos] + char + current_text[pos:]
+                    self.search_entry.set_text(new_text)
+                    self.search_entry.set_position(pos + 1)
+                else:
+                    self.search_entry.set_text(current_text + char)
+                return True  # Block the global action
+
+            # Block Tab and Return from triggering actions, but don't insert them
+            if keyval in (Gdk.KEY_Tab, Gdk.KEY_Return):
+                return True
+
+            # Let all other keys pass through normally
+            return False
 
         selected_row = self.list_box.get_selected_row()
 
