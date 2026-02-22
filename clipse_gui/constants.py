@@ -30,6 +30,8 @@ DEFAULT_SETTINGS = {
         "minimize_to_tray": "True",
         "tray_items_count": "20",
         "tray_paste_on_select": "True",
+        "open_links_with_browser": "True",
+        "preview_rich_content": "True",
     },
     "Style": {
         "border_radius": "6",
@@ -95,6 +97,10 @@ TRAY_ITEMS_COUNT = config.getint("General", "tray_items_count", fallback=20)
 TRAY_PASTE_ON_SELECT = config.getboolean(
     "General", "tray_paste_on_select", fallback=True
 )
+OPEN_LINKS_WITH_BROWSER = config.getboolean(
+    "General", "open_links_with_browser", fallback=True
+)
+PREVIEW_RICH_CONTENT = config.getboolean("General", "preview_rich_content", fallback=True)
 
 # Style settings
 BORDER_RADIUS = config.getint("Style", "border_radius", fallback=6)
@@ -145,6 +151,7 @@ LOAD_THRESHOLD_FACTOR = config.getfloat(
     "Performance", "load_threshold_factor", fallback=0.95
 )
 IMAGE_CACHE_MAX_SIZE = config.getint("Performance", "image_cache_max_size", fallback=50)
+
 
 # CSS Styles
 def get_app_css(
@@ -300,50 +307,117 @@ notebook stack {{
     box-shadow: none;
 }}
 
-/* Main window widget styling - use to override GTK defaults */
-.main-window button,
-.main-window .text-button,
-.main-window button.text-button {{
+/* ============================================
+   GLOBAL WIDGET STYLING (All Windows)
+   ============================================ */
+
+/* Button styling - applies to all windows */
+button,
+.text-button,
+button.text-button {{
     border-radius: {border_radius}px;
     padding: 6px 12px;
 }}
 
-.main-window button:focus {{
+button:focus {{
     outline: none;
     box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
 }}
 
-.main-window entry,
-.main-window .entry,
-.main-window entry.search {{
+/* Entry/Input styling - applies to all windows */
+entry,
+.entry,
+entry.search {{
     border-radius: {border_radius}px;
     padding: 6px 10px;
 }}
 
-.main-window entry:focus {{
+entry:focus {{
     outline: none;
     box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
 }}
 
-/* Switch styling - the slider is the inner part */
-.main-window switch {{
-    border-radius: {border_radius + 10}px;
+/* Switch styling - applies to all windows */
+/* The switch track/container - always pill shaped */
+switch {{
+    border-radius: 9999px;
+    background-color: alpha(#ffffff, 0.15);
+    border: none;
+    outline: none;
+    min-height: 24px;
 }}
 
-.main-window switch slider {{
-    border-radius: {border_radius}px;
-    min-height: {border_radius * 2 if border_radius > 0 else 20}px;
+/* Switch checked state - track background */
+switch:checked {{
+    background-color: {selection_color};
 }}
 
-.main-window spinbutton,
-.main-window spinbutton.entry {{
+/* Remove focus ring from switch */
+switch:focus {{
+    outline: none;
+    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+}}
+
+/* GTK3 switch slider (thumb) - always circular */
+switch slider {{
+    border-radius: 9999px;
+    min-height: 20px;
+    min-width: 20px;
+    background-color: #ffffff;
+}}
+
+/* Spinbutton styling - applies to all windows */
+spinbutton,
+spinbutton.entry {{
     border-radius: {border_radius}px;
+    outline: none;
+}}
+
+/* Remove default focus ring from spinbutton, use custom shadow */
+spinbutton:focus,
+spinbutton.entry:focus {{
+    outline: none;
+    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+}}
+
+/* Spinbutton up/down buttons */
+spinbutton button {{
+    border-radius: {max(2, border_radius - 2)}px;
+    padding: 2px 6px;
+    margin: 1px;
+}}
+
+/* Spinbutton button focus - completely remove any ring */
+spinbutton button:focus {{
+    outline: none;
+    box-shadow: none;
+    border-color: transparent;
+}}
+
+/* Color button styling */
+colorbutton {{
+    border-radius: {border_radius}px;
+    padding: 4px;
+}}
+
+colorbutton button {{
+    border-radius: {max(2, border_radius - 2)}px;
+}}
+
+/* Remove focus ring from colorbutton */
+colorbutton button:focus {{
+    outline: none;
+    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
 }}
 
 /* Scrollbar styling */
 scrollbar slider {{
     border-radius: {border_radius}px;
 }}
+
+/* ============================================
+   MAIN WINDOW SPECIFIC STYLING
+   ============================================ */
 
 /* List box and row focus/selection styling */
 .main-window list,
@@ -367,6 +441,17 @@ scrollbar slider {{
 .main-window list row:selected,
 .main-window listbox row:selected {{
     border-radius: 0 {border_radius}px {border_radius}px 0;
+}}
+
+/* URL / link item styling */
+.url-link {{
+    color: #5b9cf6;
+}}
+
+.url-badge {{
+    font-size: 78%;
+    color: alpha(#ffffff, 0.45);
+    font-style: italic;
 }}
 """
 

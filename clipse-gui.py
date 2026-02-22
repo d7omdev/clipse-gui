@@ -7,13 +7,13 @@ import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import gi
-from clipse_gui import __version__, constants
-
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("GLib", "2.0")
+
+from clipse_gui import __version__, constants  # noqa: E402
 
 PACKAGE_PARENT = ".."
 SCRIPT_DIR = os.path.dirname(
@@ -60,31 +60,30 @@ def parse_args_from_sys_argv():
 def setup_logging(debug=False):
     global log
     try:
-        console_level = logging.DEBUG if debug else logging.INFO
-        file_level = logging.DEBUG  # Always log DEBUG level to file
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         date_format = "%Y-%m-%d %H:%M:%S"
 
         stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setLevel(console_level)
+        stream_handler.setLevel(logging.DEBUG if debug else logging.INFO)
         stream_handler.setFormatter(ColorFormatter(log_format, datefmt=date_format))
 
-        log_file_path = os.path.join(constants.CONFIG_DIR, "clipse-gui.log")
-        file_handler = RotatingFileHandler(
-            filename=log_file_path,
-            maxBytes=5 * 1024 * 1024,
-            backupCount=3,
-        )
-        file_handler.setLevel(file_level)
-        file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+        handlers = [stream_handler]
 
-        logging.basicConfig(
-            level=logging.DEBUG, handlers=[stream_handler, file_handler]
-        )
+        # File logging only in debug mode — RotatingFileHandler adds ~100ms I/O on every start
+        if debug:
+            log_file_path = os.path.join(constants.CONFIG_DIR, "clipse-gui.log")
+            file_handler = RotatingFileHandler(
+                filename=log_file_path,
+                maxBytes=5 * 1024 * 1024,
+                backupCount=3,
+            )
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+            handlers.append(file_handler)
+
+        logging.basicConfig(level=logging.DEBUG, handlers=handlers)
         log = logging.getLogger(__name__)
-        log.info(
-            f"Logging initialized - Console: {'DEBUG' if debug else 'INFO'}, File: DEBUG. Log file: {log_file_path}"
-        )
+        log.info(f"Logging initialized ({'DEBUG + file' if debug else 'INFO'})")
     except Exception as e:
         print(f"CRITICAL: Failed to set up logging: {e}", file=sys.stderr)
         traceback.print_exc()

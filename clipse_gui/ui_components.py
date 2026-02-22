@@ -25,6 +25,8 @@ from .constants import (
     MINIMIZE_TO_TRAY,
     TRAY_ITEMS_COUNT,
     TRAY_PASTE_ON_SELECT,
+    OPEN_LINKS_WITH_BROWSER,
+    PREVIEW_RICH_CONTENT,
     config,
 )
 
@@ -106,6 +108,43 @@ def animate_pin_shake(container, is_pinned):
     apply_wiggle(0)
 
 
+_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff", ".tif")
+
+
+def _is_image_url(text):
+    """True if text is an http(s) URL pointing to a recognised image extension."""
+    if not text or not isinstance(text, str):
+        return False
+    t = text.strip().lower()
+    if not (t.startswith("http://") or t.startswith("https://")):
+        return False
+    return any(t.split("?")[0].endswith(ext) for ext in _IMAGE_EXTENSIONS)
+
+
+def _is_svg_content(text):
+    """True if text appears to be inline SVG markup."""
+    if not text or not isinstance(text, str):
+        return False
+    t = text.strip()
+    return t.startswith("<svg") or "<svg" in t[:200]
+
+
+def _is_data_uri(text):
+    """True if text is a base64-encoded image data URI."""
+    if not text or not isinstance(text, str):
+        return False
+    t = text.strip()
+    return t.startswith("data:image") and ";base64," in t
+
+
+def _is_url(text):
+    """True if text is any http(s) URL."""
+    if not text or not isinstance(text, str):
+        return False
+    t = text.strip().lower()
+    return t.startswith("http://") or t.startswith("https://")
+
+
 def escape_markup(text):
     """Escape special characters for Pango markup."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -165,6 +204,27 @@ def create_list_row_widget(
     row.item_pinned = item.get("pinned", False)
     row.file_path = item.get("filePath", "")
     row.is_image = item.get("filePath") not in [None, "null", ""]
+
+    # Detect special content types for text items
+    text_value = item.get("value", "")
+    row.is_url_image = False
+    row.is_svg_content = False
+    row.is_data_uri = False
+    row.is_url = False
+    row.image_url = None
+    row.website_url = None
+    if not row.is_image:
+        if _is_image_url(text_value):
+            row.is_url_image = True
+            row.image_url = text_value.strip()
+        elif _is_svg_content(text_value):
+            row.is_svg_content = True
+        elif _is_data_uri(text_value):
+            row.is_data_uri = True
+        elif _is_url(text_value):
+            row.is_url = True
+            row.website_url = text_value.strip()
+
     style_context = row.get_style_context()
     if row.item_pinned:
         style_context.add_class("pinned-row")
@@ -229,8 +289,73 @@ def create_list_row_widget(
         title_label.set_max_width_chars(20)  # Reduced from 25
         title_label.set_halign(Gtk.Align.START)
         content_box.pack_start(title_label, False, False, 0)
+    elif (row.is_url_image or row.is_data_uri) and PREVIEW_RICH_CONTENT:
+        # Remote image URL or base64 data URI — show thumbnail
+        thumb_w = int(LIST_ITEM_IMAGE_WIDTH * (0.3 if is_compact else 0.8))
+        thumb_h = int(LIST_ITEM_IMAGE_HEIGHT * (0.3 if is_compact else 0.8))
+        image_container = Gtk.Frame()
+        image_container.set_shadow_type(Gtk.ShadowType.NONE)
+        image_container.set_size_request(thumb_w, thumb_h)
+        placeholder = Gtk.Label(label="…")
+        placeholder.set_halign(Gtk.Align.CENTER)
+        placeholder.set_valign(Gtk.Align.CENTER)
+        image_container.add(placeholder)
+        content_box.pack_start(image_container, False, False, 0)
+
+        if row.is_data_uri:
+            image_handler.load_data_uri_async(
+                text_value.strip(), image_container, placeholder,
+                LIST_ITEM_IMAGE_WIDTH, LIST_ITEM_IMAGE_HEIGHT, update_image_callback,
+            )
+        else:
+            image_handler.load_remote_image_async(
+                row.image_url, image_container, placeholder,
+                LIST_ITEM_IMAGE_WIDTH, LIST_ITEM_IMAGE_HEIGHT, update_image_callback,
+            )
+
+        badge = Gtk.Label(label="[image url]" if row.is_url_image else "[base64]")
+        badge.get_style_context().add_class("url-badge")
+        badge.set_halign(Gtk.Align.START)
+        content_box.pack_start(badge, False, False, 0)
+    elif row.is_svg_content and PREVIEW_RICH_CONTENT:
+        # Inline SVG — render as thumbnail
+        thumb_w = int(LIST_ITEM_IMAGE_WIDTH * (0.3 if is_compact else 0.8))
+        thumb_h = int(LIST_ITEM_IMAGE_HEIGHT * (0.3 if is_compact else 0.8))
+        image_container = Gtk.Frame()
+        image_container.set_shadow_type(Gtk.ShadowType.NONE)
+        image_container.set_size_request(thumb_w, thumb_h)
+        placeholder = Gtk.Label(label="…")
+        placeholder.set_halign(Gtk.Align.CENTER)
+        placeholder.set_valign(Gtk.Align.CENTER)
+        image_container.add(placeholder)
+        content_box.pack_start(image_container, False, False, 0)
+
+        image_handler.load_svg_async(
+            text_value.strip(), image_container, placeholder,
+            LIST_ITEM_IMAGE_WIDTH, LIST_ITEM_IMAGE_HEIGHT, update_image_callback,
+        )
+
+        badge = Gtk.Label(label="[svg]")
+        badge.get_style_context().add_class("url-badge")
+        badge.set_halign(Gtk.Align.START)
+        content_box.pack_start(badge, False, False, 0)
+    elif row.is_url:
+        # Regular URL — link icon + URL text
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        icon = Gtk.Image.new_from_icon_name("external-link-symbolic", Gtk.IconSize.MENU)
+        icon.get_style_context().add_class("url-link")
+        row_box.pack_start(icon, False, False, 0)
+        max_chars = 50 if is_compact else 80
+        display_url = text_value.strip()
+        if len(display_url) > max_chars:
+            display_url = display_url[:max_chars - 1] + "…"
+        lbl = Gtk.Label(label=display_url)
+        lbl.set_xalign(0)
+        lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        lbl.get_style_context().add_class("url-link")
+        row_box.pack_start(lbl, True, True, 0)
+        content_box.pack_start(row_box, False, False, 0)
     else:
-        text_value = item.get("value", "")
         # Limit to 1 line in compact mode, 3 lines otherwise
         max_lines = 1 if is_compact else 3
         display_text = "\n".join(text_value.splitlines()[:max_lines])
@@ -578,10 +703,30 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         "Highlight matching search terms in the results list",
     )
 
+    # Open links in browser setting
+    open_links_switch = Gtk.Switch()
+    open_links_switch.set_active(OPEN_LINKS_WITH_BROWSER)
+    open_links_box = _create_setting_row(
+        "Open links on Space:",
+        open_links_switch,
+        "Press Space on a URL item to open it in the browser (disable to show text preview)",
+    )
+
+    # Preview rich content setting
+    rich_content_switch = Gtk.Switch()
+    rich_content_switch.set_active(PREVIEW_RICH_CONTENT)
+    rich_content_box = _create_setting_row(
+        "Preview rich content:",
+        rich_content_switch,
+        "Render image URLs, SVGs, and base64 images as thumbnails in the list",
+    )
+
     general_box.pack_start(compact_box, False, False, 0)
     general_box.pack_start(hover_box, False, False, 0)
     general_box.pack_start(enter_paste_box, False, False, 0)
     general_box.pack_start(highlight_search_box, False, False, 0)
+    general_box.pack_start(open_links_box, False, False, 0)
+    general_box.pack_start(rich_content_box, False, False, 0)
     general_frame.add(general_box)
     general_tab.pack_start(general_frame, False, False, 0)
 
@@ -820,6 +965,30 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
 
         constants.HIGHLIGHT_SEARCH = switch.get_active()
 
+    def on_open_links_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "open_links_with_browser", str(switch.get_active()))
+        config._save_config()
+        import clipse_gui.constants as constants
+
+        constants.OPEN_LINKS_WITH_BROWSER = switch.get_active()
+
+    def on_rich_content_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "preview_rich_content", str(switch.get_active()))
+        config._save_config()
+        import clipse_gui.constants as constants
+
+        constants.PREVIEW_RICH_CONTENT = switch.get_active()
+
     def on_tray_switch_toggled(switch, state):
         nonlocal settings_changed
         settings_changed = True
@@ -968,6 +1137,8 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     hover_switch.connect("state-set", on_hover_switch_toggled)
     enter_paste_switch.connect("state-set", on_enter_paste_switch_toggled)
     highlight_search_switch.connect("state-set", on_highlight_search_switch_toggled)
+    open_links_switch.connect("state-set", on_open_links_switch_toggled)
+    rich_content_switch.connect("state-set", on_rich_content_switch_toggled)
     tray_switch.connect("state-set", on_tray_switch_toggled)
     tray_items_spin.connect("value-changed", on_tray_items_changed)
     tray_paste_switch.connect("state-set", on_tray_paste_switch_toggled)

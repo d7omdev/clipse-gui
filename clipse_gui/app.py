@@ -36,22 +36,6 @@ class ClipseGuiApplication(Gtk.Application):
         if not self.window:
             log.debug("Activating application - creating main window.")
 
-            # Check for config load errors before creating UI
-            if constants.config.load_error_message:
-                log.warning("Displaying configuration error dialog to user.")
-                error_dialog = Gtk.MessageDialog(
-                    transient_for=None,
-                    message_type=Gtk.MessageType.WARNING,
-                    buttons=Gtk.ButtonsType.OK,
-                    text="Configuration File Warning",
-                )
-                error_dialog.format_secondary_text(
-                    f"{constants.config.load_error_message}"
-                )
-                error_dialog.run()
-                error_dialog.destroy()
-                constants.config.load_error_message = None
-
             self.window = Gtk.ApplicationWindow(application=self, title=APP_NAME)
             self.window.set_default_size(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
             try:
@@ -59,39 +43,56 @@ class ClipseGuiApplication(Gtk.Application):
             except GLib.Error as e:
                 log.warning(f"Could not set window icon name: {e}")
 
-            # Setup tray manager
-            self.tray_manager = TrayManager(self)
-
-            # Connect window events for tray functionality
             self.window.connect("delete-event", self._on_window_delete)
 
-            try:
-                self.controller = ClipboardHistoryController(self.window)
-            except Exception as e:
-                log.critical(
-                    f"Failed to initialize ClipboardHistoryController: {e}",
-                    exc_info=True,
-                )
-                error_dialog = Gtk.MessageDialog(
-                    transient_for=self.window,
-                    message_type=Gtk.MessageType.ERROR,
-                    buttons=Gtk.ButtonsType.OK,
-                    text="Application Initialization Failed",
-                )
-                error_dialog.format_secondary_text(
-                    f"Could not initialize the main application component.\n"
-                    f"Please check logs for details.\n\nError: {e}"
-                )
-                error_dialog.run()
-                error_dialog.destroy()
-                self.quit()
-                return
-
+            # Show the window immediately so it appears without delay
             self.window.show_all()
-            log.debug("Main window created and shown.")
+
+            # Finish heavy initialization on the next idle cycle
+            GLib.idle_add(self._finish_activation)
         else:
             log.debug("Application already active - presenting existing window.")
             self._restore_window_from_tray()
+
+    def _finish_activation(self):
+        """Heavy initialization deferred until after window is shown."""
+        # Show config error if any
+        if constants.config.load_error_message:
+            log.warning("Displaying configuration error dialog to user.")
+            error_dialog = Gtk.MessageDialog(
+                transient_for=self.window,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="Configuration File Warning",
+            )
+            error_dialog.format_secondary_text(constants.config.load_error_message)
+            error_dialog.run()
+            error_dialog.destroy()
+            constants.config.load_error_message = None
+
+        try:
+            self.controller = ClipboardHistoryController(self.window)
+            self.window.show_all()
+        except Exception as e:
+            log.critical(f"Failed to initialize ClipboardHistoryController: {e}", exc_info=True)
+            error_dialog = Gtk.MessageDialog(
+                transient_for=self.window,
+                message_type=Gtk.MessageType.ERROR,
+                buttons=Gtk.ButtonsType.OK,
+                text="Application Initialization Failed",
+            )
+            error_dialog.format_secondary_text(
+                f"Could not initialize the main application component.\n"
+                f"Please check logs for details.\n\nError: {e}"
+            )
+            error_dialog.run()
+            error_dialog.destroy()
+            self.quit()
+            return False
+
+        # Tray setup after everything else
+        self.tray_manager = TrayManager(self)
+        return False
 
     def _restore_window_from_tray(self):
         """Restore and show the window, even if minimized to tray."""

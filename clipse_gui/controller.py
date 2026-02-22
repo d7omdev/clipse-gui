@@ -23,6 +23,7 @@ from .constants import (
     X11_COPY_TOOL_CMD,
     DEFAULT_WINDOW_WIDTH,
     DEFAULT_WINDOW_HEIGHT,
+    OPEN_LINKS_WITH_BROWSER,
     config,
     get_app_css,
 )
@@ -104,8 +105,7 @@ class ClipboardHistoryController:
         threading.Thread(target=self._load_initial_data, daemon=True).start()
 
         self._apply_css()
-        self.update_zoom()
-        self.update_compact_mode()
+        self.update_compact_mode(skip_populate=True)
 
     def _connect_signals(self):
         """Connects GTK signals to their handler methods."""
@@ -128,35 +128,33 @@ class ClipboardHistoryController:
             log.warning("Could not get vertical adjustment for lazy loading.")
 
     def _apply_css(self):
-        """Applies the application-wide CSS."""
+        """Applies the application-wide CSS including current zoom level."""
         screen = Gdk.Screen.get_default()
         if not screen:
             log.error("Cannot get default GdkScreen to apply CSS")
             return
 
-        if not hasattr(self, "style_provider"):
-            log.debug("Creating and adding application CSS provider.")
-            self.style_provider = Gtk.CssProvider()
-            try:
-                css = self._get_current_css()
-                self.style_provider.load_from_data(css.encode())
+        zoom_css = f"* {{ font-size: {round(self.zoom_level * 100)}%; }}".encode()
+        try:
+            if not hasattr(self, "style_provider"):
+                log.debug("Creating and adding application CSS provider.")
+                self.style_provider = Gtk.CssProvider()
+                self.style_provider.load_from_data(
+                    self._get_current_css().encode() + b"\n" + zoom_css
+                )
                 Gtk.StyleContext.add_provider_for_screen(
                     screen,
                     self.style_provider,
                     Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
                 )
-            except GLib.Error as e:
-                log.error(f"Failed to load or add CSS provider: {e}")
-            except Exception as e:
-                log.error(f"Unexpected error applying CSS: {e}")
-        else:
-            # Provider exists, reload CSS with current settings
-            try:
-                css = self._get_current_css()
-                self.style_provider.load_from_data(css.encode())
-                log.debug("CSS reloaded with current settings")
-            except Exception as e:
-                log.error(f"Failed to reload CSS: {e}")
+            else:
+                self.style_provider.load_from_data(
+                    self._get_current_css().encode() + b"\n" + zoom_css
+                )
+        except GLib.Error as e:
+            log.error(f"Failed to load CSS: {e}")
+        except Exception as e:
+            log.error(f"Unexpected error applying CSS: {e}")
 
     def _get_current_css(self):
         """Get current CSS with applied style settings."""
@@ -451,17 +449,8 @@ class ClipboardHistoryController:
     def update_zoom(self):
         """Applies the current zoom level to the application CSS."""
         self.zoom_level = max(0.5, min(self.zoom_level, 3.0))
-        zoom_css = f"* {{ font-size: {round(self.zoom_level * 100)}%; }}".encode()
-        try:
-            if not hasattr(self, "style_provider"):
-                self._apply_css()
-            base_css = self._get_current_css().encode()
-            self.style_provider.load_from_data(base_css + b"\n" + zoom_css)
-            log.debug(f"Zoom updated to {self.zoom_level:.2f}")
-        except GLib.Error as e:
-            log.error(f"Error loading CSS for zoom: {e}")
-        except Exception as e:
-            log.error(f"Unexpected error updating zoom CSS: {e}")
+        self._apply_css()
+        log.debug(f"Zoom updated to {self.zoom_level:.2f}")
 
     def on_vadjustment_changed(self, adjustment):
         """Callback when the scrollbar position changes, triggers lazy load if needed."""
@@ -1216,6 +1205,16 @@ class ClipboardHistoryController:
             # self.flash_status(error_msg[:150])
             return False
 
+    def open_url_with_gtk(self, url):
+        """Open a URL using Gtk.show_uri_on_window (respects the user's default browser)."""
+        try:
+            log.info(f"Opening URL: {url}")
+            Gtk.show_uri_on_window(None, url, Gdk.CURRENT_TIME)
+            self.flash_status(f"Opening: {url[:60]}…", duration=2000)
+        except Exception as e:
+            log.error(f"Failed to open URL: {e}")
+            self.flash_status(f"Error opening URL: {e}")
+
     def show_item_preview(self):
         """Shows the preview window for the selected item."""
         selected_row = self.list_box.get_selected_row()
@@ -1223,7 +1222,6 @@ class ClipboardHistoryController:
             return
 
         original_index = getattr(selected_row, "item_index", -1)
-        # Correctly check if file_path exists and is not None/null string
         file_path_attr = getattr(selected_row, "file_path", None)
         is_image = file_path_attr is not None and file_path_attr != "null"
 
@@ -1643,7 +1641,13 @@ class ClipboardHistoryController:
                 self.toggle_item_selection()
                 return True
             elif selected_row:
-                # Normal mode, space shows preview
+                # If it's a URL and browser-open is enabled, open it
+                if OPEN_LINKS_WITH_BROWSER and getattr(selected_row, "is_url", False):
+                    url = getattr(selected_row, "website_url", None) or getattr(selected_row, "item_value", "")
+                    if url:
+                        self.open_url_with_gtk(url)
+                        return True
+                # Otherwise show preview
                 self.show_item_preview()
                 return True
         if ctrl and keyval == Gdk.KEY_a:
@@ -1802,25 +1806,21 @@ class ClipboardHistoryController:
         config.config.set("General", "compact_mode", str(self.compact_mode))
         config._save_config()
 
-    def update_compact_mode(self):
+    def update_compact_mode(self, skip_populate=False):
         """Updates the UI based on compact mode state."""
         if self.compact_mode:
             self.main_box.get_style_context().add_class("compact-mode")
-            # Adjust window size for compact mode - make it much smaller
             self.window.resize(
                 int(DEFAULT_WINDOW_WIDTH * 0.6), int(DEFAULT_WINDOW_HEIGHT * 0.6)
             )
-            # Hide search entry in compact mode
             self.search_entry.hide()
         else:
             self.main_box.get_style_context().remove_class("compact-mode")
-            # Restore default window size
             self.window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
-            # Show search entry in normal mode
             self.search_entry.show()
 
-        # Repopulate the list to apply compact mode to existing rows
-        self.populate_list_view()
+        if not skip_populate:
+            self.populate_list_view()
 
     def update_hover_to_select(self):
         """Updates hover-to-select setting and repopulates the list."""
