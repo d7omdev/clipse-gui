@@ -79,7 +79,6 @@ jobs:
           mkdir -p dist
           python3 -m nuitka \
             --onefile \
-            --linux-onefile-compression=none \
             --output-dir=dist \
             --output-filename=clipse-gui.bin \
             --include-package=clipse_gui \
@@ -193,7 +192,6 @@ jobs:
           mkdir -p dist
           python3 -m nuitka \
             --onefile \
-            --linux-onefile-compression=none \
             --output-dir=dist \
             --output-filename=clipse-gui.bin \
             --include-package=clipse_gui \
