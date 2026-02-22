@@ -76,9 +76,17 @@ jobs:
           python3 -m venv --system-site-packages venv
           . venv/bin/activate
           pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
-          export PATH="$HOME/.local/bin:$PATH"
-          just nuitka
+          mkdir -p dist
+          python3 -m nuitka \
+            --onefile \
+            --linux-onefile-compression=none \
+            --output-dir=dist \
+            --output-filename=clipse-gui.bin \
+            --include-package=clipse_gui \
+            --include-package-data=clipse_gui \
+            --enable-plugin=gi \
+            --noinclude-default-mode=nofollow \
+            clipse-gui.py
           mv dist/clipse-gui.bin \
              dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
           chmod +x dist/*
@@ -182,9 +190,17 @@ jobs:
           python3 -m venv --system-site-packages venv
           . venv/bin/activate
           pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
-          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
-          export PATH="$HOME/.local/bin:$PATH"
-          just nuitka
+          mkdir -p dist
+          python3 -m nuitka \
+            --onefile \
+            --linux-onefile-compression=none \
+            --output-dir=dist \
+            --output-filename=clipse-gui.bin \
+            --include-package=clipse_gui \
+            --include-package-data=clipse_gui \
+            --enable-plugin=gi \
+            --noinclude-default-mode=nofollow \
+            clipse-gui.py
           mv dist/clipse-gui.bin \
              dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
           chmod +x dist/*
