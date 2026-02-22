@@ -76,7 +76,9 @@ jobs:
           python3 -m venv --system-site-packages venv
           . venv/bin/activate
           pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
-          make nuitka
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+          export PATH="$HOME/.local/bin:$PATH"
+          just nuitka
           mv dist/clipse-gui.bin \
              dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
           chmod +x dist/*
@@ -180,7 +182,9 @@ jobs:
           python3 -m venv --system-site-packages venv
           . venv/bin/activate
           pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
-          make nuitka
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
+          export PATH="$HOME/.local/bin:$PATH"
+          just nuitka
           mv dist/clipse-gui.bin \
              dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
           chmod +x dist/*

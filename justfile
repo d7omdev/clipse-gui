@@ -600,6 +600,23 @@ _generate-desktop:
     StartupWMClass=org.d7om.ClipseGUI
     EOF
 
+# Build a standalone binary with Nuitka (group: 'build')
+[group('build')]
+nuitka:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p dist
+    python3 -m nuitka \
+        --onefile \
+        --linux-onefile-compression=none \
+        --output-dir=dist \
+        --output-filename=clipse-gui.bin \
+        --include-package=clipse_gui \
+        --include-package-data=clipse_gui \
+        --enable-plugin=gi \
+        --noinclude-default-mode=nofollow \
+        clipse-gui.py
+
 # Verify prefix directory exists and is writable (private)
 [private]
 verify-prefix:
