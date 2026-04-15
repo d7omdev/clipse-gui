@@ -166,14 +166,14 @@ def get_app_css(
     border-left: 3px solid {accent_color};
     background-color: alpha({accent_color}, 0.01);
     font-weight: 500;
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: {border_radius}px;
 }}
 .list-row {{
     padding: 8px 12px;
     margin-top: 1px;
     margin-bottom: 1px;
     border-left: 3px solid transparent;
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: {border_radius}px;
     transition: background-color 0.2s ease,
                 border-left-color 0.2s ease;
 }}
@@ -332,9 +332,15 @@ entry.search {{
     padding: 6px 10px;
 }}
 
-entry:focus {{
+/* Focus ring only on standalone entries — not when nested inside spinbutton */
+entry:focus:not(:backdrop) {{
     outline: none;
-    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+    box-shadow: inset 0 0 0 1px alpha({selection_color}, 0.55);
+}}
+
+spinbutton > entry:focus,
+spinbutton entry:focus {{
+    box-shadow: none;
 }}
 
 /* Switch styling - applies to all windows */
@@ -352,10 +358,10 @@ switch:checked {{
     background-color: {selection_color};
 }}
 
-/* Remove focus ring from switch */
+/* Remove focus ring from switch — switch already shows state via slider position */
 switch:focus {{
     outline: none;
-    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+    box-shadow: none;
 }}
 
 /* GTK3 switch slider (thumb) - always circular */
@@ -366,29 +372,58 @@ switch slider {{
     background-color: #ffffff;
 }}
 
-/* Spinbutton styling - applies to all windows */
-spinbutton,
-spinbutton.entry {{
+/* Spinbutton — flat unified container, kill internal separators */
+spinbutton {{
     border-radius: {border_radius}px;
     outline: none;
 }}
 
-/* Remove default focus ring from spinbutton, use custom shadow */
-spinbutton:focus,
-spinbutton.entry:focus {{
+spinbutton entry,
+spinbutton > entry {{
+    background: transparent;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-right: none;
+    box-shadow: none;
     outline: none;
-    box-shadow: 0 0 0 2px alpha({selection_color}, 0.5);
+    min-height: 26px;
+    padding: 2px 8px;
+}}
+
+spinbutton entry:focus,
+spinbutton > entry:focus {{
+    background: transparent;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}}
+
+spinbutton:focus-within {{
+    outline: none;
+    box-shadow: 0 0 0 1px alpha({selection_color}, 0.45);
 }}
 
 /* Spinbutton up/down buttons */
 spinbutton button {{
     border-radius: {max(2, border_radius - 2)}px;
-    padding: 2px 6px;
+    padding: 2px 8px;
     margin: 1px;
+    background: transparent;
+    background-image: none;
+    border: none;
+    border-left: none;
+    box-shadow: none;
 }}
 
-/* Spinbutton button focus - completely remove any ring */
-spinbutton button:focus {{
+spinbutton button:hover {{
+    background-color: alpha(#ffffff, 0.08);
+}}
+
+spinbutton button:focus,
+spinbutton button:active {{
     outline: none;
     box-shadow: none;
     border-color: transparent;
@@ -427,7 +462,7 @@ scrollbar slider {{
 
 .main-window list row,
 .main-window listbox row {{
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: {border_radius}px;
     outline: none;
 }}
 
@@ -435,12 +470,12 @@ scrollbar slider {{
 .main-window listbox row:focus {{
     outline: none;
     box-shadow: inset 0 0 0 2px alpha({selection_color}, 0.4);
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: {border_radius}px;
 }}
 
 .main-window list row:selected,
 .main-window listbox row:selected {{
-    border-radius: 0 {border_radius}px {border_radius}px 0;
+    border-radius: {border_radius}px;
 }}
 
 /* URL / link item styling */
@@ -452,6 +487,77 @@ scrollbar slider {{
     font-size: 78%;
     color: alpha(#ffffff, 0.45);
     font-style: italic;
+}}
+
+/* ============================================
+   HEADER BAR (search + pin filter)
+   ============================================ */
+
+.main-window .header-bar {{
+    margin-bottom: 4px;
+}}
+
+.main-window .header-search {{
+    min-height: 34px;
+    border-radius: {border_radius}px;
+}}
+
+.main-window .header-search:focus,
+.main-window .header-search:focus-within {{
+    box-shadow: inset 0 0 0 1px alpha({selection_color}, 0.55);
+}}
+
+.main-window .pin-toggle {{
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: {border_radius}px;
+    border: 1px solid alpha(#ffffff, 0.12);
+    background-color: alpha(#ffffff, 0.04);
+    background-image: none;
+    color: alpha(#ffffff, 0.72);
+    font-weight: 500;
+    transition: background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease;
+}}
+
+.main-window .pin-toggle:hover {{
+    background-color: alpha(#ffffff, 0.09);
+    border-color: alpha(#ffffff, 0.20);
+    color: alpha(#ffffff, 0.95);
+}}
+
+.main-window .pin-toggle:checked,
+.main-window .pin-toggle:active {{
+    background-color: alpha({accent_color}, 0.18);
+    background-image: none;
+    border-color: alpha({accent_color}, 0.55);
+    color: {accent_color};
+    font-weight: 600;
+}}
+
+.main-window .pin-toggle:checked:hover {{
+    background-color: alpha({accent_color}, 0.26);
+    border-color: {accent_color};
+}}
+
+.main-window .pin-toggle image {{
+    -gtk-icon-transform: scale(0.92);
+}}
+
+/* ============================================
+   SETTINGS — APPEARANCE TAB POLISH
+   ============================================ */
+
+colorbutton {{
+    min-width: 64px;
+    min-height: 30px;
+}}
+
+colorbutton button {{
+    min-width: 64px;
+    min-height: 30px;
+    padding: 2px;
 }}
 """
 

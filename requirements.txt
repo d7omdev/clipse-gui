@@ -1,9 +1,15 @@
+# Development-only dependencies (formatters, linters, type stubs, optional
+# image/file-watch helpers used during development). Runtime deps come from
+# the system: python-gobject + gtk3 (via the AUR package or your distro's
+# equivalent). See pyproject.toml for the canonical install path.
+#
+# Nuitka and PyGObject were removed: bundling PyGObject froze a copy of
+# `gi/overrides/` into the binary that crashed against newer system GLib.
+# See #14 for the postmortem.
 nodeenv==1.10.0
-Nuitka==2.6.9
 ordered-set==4.1.0
 pillow==11.2.1
 pycairo==1.27.0
-PyGObject==3.52.3
 PyGObject-stubs==2.13.0
 pyright==1.1.408
 ruff==0.15.0
