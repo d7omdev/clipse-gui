@@ -1,4 +1,5 @@
 import logging
+import signal
 from . import constants
 from .constants import (
     APP_NAME,
@@ -30,6 +31,21 @@ class ClipseGuiApplication(Gtk.Application):
         """Called once when the application starts."""
         Gtk.Application.do_startup(self)
         log.debug(f"Application {APPLICATION_ID} starting up.")
+        self._install_signal_handlers()
+
+    def _install_signal_handlers(self):
+        """Wire SIGINT (Ctrl+C) and SIGTERM into the GLib main loop for graceful exit."""
+        def _on_signal(sig_name):
+            log.info(f"{sig_name} received — quitting application gracefully.")
+            self.quit()
+            return GLib.SOURCE_REMOVE
+
+        GLib.unix_signal_add(
+            GLib.PRIORITY_DEFAULT, signal.SIGINT, _on_signal, "SIGINT"
+        )
+        GLib.unix_signal_add(
+            GLib.PRIORITY_DEFAULT, signal.SIGTERM, _on_signal, "SIGTERM"
+        )
 
     def do_activate(self):
         """Called when the application is launched. Creates the main window and controller."""
@@ -37,7 +53,19 @@ class ClipseGuiApplication(Gtk.Application):
             log.debug("Activating application - creating main window.")
 
             self.window = Gtk.ApplicationWindow(application=self, title=APP_NAME)
-            self.window.set_default_size(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+
+            # Pick initial window size based on compact mode setting from config.
+            # This must happen BEFORE first show so the WM honors it.
+            compact_mode_on = constants.config.getboolean(
+                "General", "compact_mode", fallback=False
+            )
+            if compact_mode_on:
+                init_w = int(DEFAULT_WINDOW_WIDTH * 0.6)
+                init_h = int(DEFAULT_WINDOW_HEIGHT * 0.6)
+            else:
+                init_w = DEFAULT_WINDOW_WIDTH
+                init_h = DEFAULT_WINDOW_HEIGHT
+            self.window.set_default_size(init_w, init_h)
             try:
                 self.window.set_icon_name("edit-copy")
             except GLib.Error as e:
