@@ -48,178 +48,58 @@ jobs:
           A GTK3 graphical user interface for the excellent
           [clipse](https://github.com/savedra1/clipse).
 
+          ## 📦 Install
+
+          - **Arch Linux**: `yay -S clipse-gui` (AUR)
+          - **Other distros**: download the wheel below and run
+            `pip install clipse_gui-*.whl`. Requires system `python-gobject`,
+            `gtk3`, `wl-clipboard`, and `xdotool` or `wtype`.
+          - **From source**: download the `.tar.gz` sdist and run `pip install`,
+            or clone and use `python -m build` + `python -m installer`.
+
+          > ⚠️ The Nuitka onefile and AppImage are no longer published — they
+          > shipped a frozen `gi` that asserted against the user's live `glib2`
+          > and crashed on rolling distros (issues #13, #14). The wheel + sdist
+          > install path keeps `gi` in lockstep with the user's system Python.
+
           ## 📝 Changelog
           ${{ steps.changelog.outputs.changelog }}
           EOF
-
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat release_body.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-  build-linux-x86_64:
+  build-distributions:
     runs-on: ubuntu-latest
     needs: generate-changelog
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            python3-venv python3-dev python3-gi python3-gi-cairo \
-            gir1.2-gtk-3.0 libgirepository1.0-dev build-essential \
-            libssl-dev zlib1g-dev patchelf libcairo2-dev pkg-config
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
-      - name: Build
-        run: |
-          set -e
-          python3 -m venv --system-site-packages venv
-          . venv/bin/activate
-          pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
-          mkdir -p dist
-          python3 -m nuitka \
-            --onefile \
-            --output-dir=dist \
-            --output-filename=clipse-gui.bin \
-            --include-package=clipse_gui \
-            --include-package-data=clipse_gui \
-            --enable-plugin=gi \
-            --noinclude-default-mode=nofollow \
-            clipse-gui.py
-          mv dist/clipse-gui.bin \
-             dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
-          chmod +x dist/*
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build
+
+      - name: Build wheel + sdist
+        run: python -m build
 
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-x86_64
-          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64
-
-  build-appimage:
-    runs-on: ubuntu-latest
-    needs:
-      - generate-changelog
-      - build-linux-x86_64
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download linux binary
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-x86_64
-          path: dist
-
-      - name: Install AppImage tools
-        run: |
-          set -e
-          sudo apt-get update
-          sudo apt-get install -y \
-            libfuse2 wget patchelf desktop-file-utils
-
-          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
-
-          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh
-
-      - name: Prepare AppDir
-        run: |
-          set -e
-          mkdir -p AppDir/usr/bin
-          mv dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64 \
-             AppDir/usr/bin/clipse-gui
-
-          chmod +x AppDir/usr/bin/clipse-gui
-
-      - name: Add desktop file
-        run: |
-          cat > AppDir/clipse-gui.desktop << EOF
-          [Desktop Entry]
-          Type=Application
-          Name=Clipse GUI
-          Exec=clipse-gui
-          Icon=clipse-gui
-          Categories=Utility;
-          Terminal=false
-          EOF
-
-      - name: Add icon
-        run: |
-          # Copy icon to hicolor theme directory (for GTK)
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          cp clipse-gui.png AppDir/usr/share/icons/hicolor/256x256/apps/clipse-gui.png
-          # Copy icon to AppDir root (required by appimagetool)
-          cp clipse-gui.png AppDir/clipse-gui.png
-
-      - name: Build AppImage
-        run: |
-          set -e
-          export ARCH=x86_64
-          export DEPLOY_GTK_VERSION=3
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --plugin gtk \
-            --output appimage
-
-          mv Clipse_GUI-*.AppImage \
-             clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64.AppImage
-
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: appimage-x86_64
-          path: clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-x86_64.AppImage
-
-  build-linux-arm64:
-    runs-on: ubuntu-24.04-arm
-    needs: generate-changelog
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            python3-venv python3-dev python3-gi python3-gi-cairo \
-            gir1.2-gtk-3.0 libgirepository1.0-dev build-essential \
-            libssl-dev zlib1g-dev patchelf libcairo2-dev pkg-config
-
-      - name: Build
-        run: |
-          set -e
-          python3 -m venv --system-site-packages venv
-          . venv/bin/activate
-          pip install -U pip Nuitka==2.6.9 ordered-set==4.1.0 zstandard==0.23.0
-          mkdir -p dist
-          python3 -m nuitka \
-            --onefile \
-            --output-dir=dist \
-            --output-filename=clipse-gui.bin \
-            --include-package=clipse_gui \
-            --include-package-data=clipse_gui \
-            --enable-plugin=gi \
-            --noinclude-default-mode=nofollow \
-            clipse-gui.py
-          mv dist/clipse-gui.bin \
-             dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
-          chmod +x dist/*
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-arm64
-          path: dist/clipse-gui-v${{ needs.generate-changelog.outputs.version }}-linux-aarch64
+          name: distributions
+          path: dist/
 
   create-release:
     runs-on: ubuntu-latest
     needs:
       - generate-changelog
-      - build-linux-x86_64
-      - build-linux-arm64
-      - build-appimage
-
+      - build-distributions
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: distributions
+          path: dist
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -227,6 +107,5 @@ jobs:
           name: "Release v${{ needs.generate-changelog.outputs.version }}"
           body: ${{ needs.generate-changelog.outputs.release_body }}
           files: |
-            artifacts/linux-x86_64/*
-            artifacts/linux-arm64/*
-            artifacts/appimage-x86_64/*
+            dist/*.whl
+            dist/*.tar.gz
