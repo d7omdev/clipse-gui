@@ -10,7 +10,18 @@ from .constants import (
 from .controller import ClipboardHistoryController
 from .tray_manager import TrayManager
 
-from gi.repository import Gtk, Gio, GLib  # noqa: E402
+from gi.repository import Gdk, Gtk, Gio, GLib  # noqa: E402
+
+# gtk-layer-shell: optional, enables cursor-position launch on Wayland
+try:
+    import gi as _gi
+
+    _gi.require_version("GtkLayerShell", "0.1")
+    from gi.repository import GtkLayerShell  # noqa: E402
+
+    _HAS_LAYER_SHELL = True
+except (ImportError, ValueError):
+    _HAS_LAYER_SHELL = False
 
 log = logging.getLogger(__name__)
 
@@ -65,11 +76,17 @@ class ClipseGuiApplication(Gtk.Application):
             else:
                 init_w = DEFAULT_WINDOW_WIDTH
                 init_h = DEFAULT_WINDOW_HEIGHT
-            self.window.set_default_size(init_w, init_h)
             try:
                 self.window.set_icon_name("edit-copy")
             except GLib.Error as e:
                 log.warning(f"Could not set window icon name: {e}")
+
+            if compact_mode_on:
+                # Layer-shell ignores set_default_size; use set_size_request
+                self.window.set_size_request(init_w, init_h)
+                self._position_at_cursor(init_w, init_h)
+            else:
+                self.window.set_default_size(init_w, init_h)
 
             self.window.connect("delete-event", self._on_window_delete)
 
@@ -121,6 +138,150 @@ class ClipseGuiApplication(Gtk.Application):
         # Tray setup after everything else
         self.tray_manager = TrayManager(self)
         return False
+
+    def _position_at_cursor(self, win_w, win_h):
+        """Position the window at the mouse cursor.
+
+        Wayland: use gtk-layer-shell (anchor top-left, margins = cursor pos).
+        X11 fallback: standard window.move().
+        """
+        import os
+
+        is_wayland = "wayland" in os.environ.get("XDG_SESSION_TYPE", "").lower()
+
+        if is_wayland and _HAS_LAYER_SHELL:
+            cx, cy, mw, mh = self._get_cursor_pos_wayland()
+            if cx is not None:
+                # Clamp so the window stays within the monitor
+                cx = min(cx, max(0, mw - win_w))
+                cy = min(cy, max(0, mh - win_h))
+                self._position_layer_shell(cx, cy)
+        elif not is_wayland:
+            self._position_at_cursor_x11(win_w, win_h)
+
+    def _get_cursor_pos_wayland(self):
+        """Get cursor position on Wayland, relative to the monitor the cursor is on.
+
+        Returns (cx, cy, monitor_w, monitor_h) or (None, None, 0, 0).
+        Layer-shell margins are per-output, so we convert global
+        compositor coordinates to monitor-local offsets.
+        """
+        import shutil
+
+        if shutil.which("hyprctl"):
+            return self._hyprctl_cursor_pos_local()
+
+        return None, None, 0, 0
+
+    def _hyprctl_cursor_pos_local(self):
+        """Query Hyprland for cursor pos and convert to monitor-local coords.
+
+        Returns (local_x, local_y, monitor_w, monitor_h) or (None, None, 0, 0).
+        """
+        import json
+        import subprocess
+
+        env = None
+        result = subprocess.run(
+            ["hyprctl", "cursorpos"], capture_output=True, timeout=1
+        )
+        if result.returncode != 0:
+            env = self._fix_hyprland_env()
+            if env:
+                result = subprocess.run(
+                    ["hyprctl", "cursorpos"],
+                    capture_output=True, timeout=1, env=env,
+                )
+        if result.returncode != 0:
+            log.debug(
+                f"hyprctl cursorpos failed (exit {result.returncode}): "
+                f"{result.stderr.decode().strip()}"
+            )
+            return None, None, 0, 0
+
+        try:
+            raw = result.stdout.decode().strip()
+            cx, cy = (int(v.strip()) for v in raw.split(","))
+        except (ValueError, TypeError) as e:
+            log.debug(f"hyprctl cursorpos parse error: {e}")
+            return None, None, 0, 0
+
+        # Get monitor geometry to convert global → local
+        mon_result = subprocess.run(
+            ["hyprctl", "monitors", "-j"],
+            capture_output=True, timeout=1, env=env,
+        )
+        if mon_result.returncode == 0:
+            try:
+                monitors = json.loads(mon_result.stdout.decode())
+                for m in monitors:
+                    mx, my = m["x"], m["y"]
+                    mw, mh = m["width"], m["height"]
+                    if mx <= cx < mx + mw and my <= cy < my + mh:
+                        return cx - mx, cy - my, mw, mh
+            except (json.JSONDecodeError, KeyError) as e:
+                log.debug(f"hyprctl monitors parse error: {e}")
+
+        return cx, cy, 1920, 1080
+
+    @staticmethod
+    def _fix_hyprland_env():
+        """Find the newest Hyprland instance socket when the env var is stale."""
+        import os
+        from pathlib import Path
+
+        hypr_dir = Path(f"/run/user/{os.getuid()}/hypr")
+        if not hypr_dir.is_dir():
+            return None
+        instances = sorted(hypr_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+        for inst in instances:
+            sock = inst / ".socket.sock"
+            if sock.exists():
+                env = os.environ.copy()
+                env["HYPRLAND_INSTANCE_SIGNATURE"] = inst.name
+                return env
+        return None
+
+    def _position_layer_shell(self, cx, cy):
+        """Use gtk-layer-shell to place the window at (cx, cy)."""
+        GtkLayerShell.init_for_window(self.window)
+        GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
+        GtkLayerShell.set_keyboard_mode(
+            self.window, GtkLayerShell.KeyboardMode.ON_DEMAND
+        )
+
+        # Anchor top-left, push to cursor via margins
+        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.TOP, True)
+        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.LEFT, True)
+        GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.TOP, cy)
+        GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.LEFT, cx)
+        log.debug(f"Layer-shell positioned at cursor ({cx}, {cy})")
+
+    def _position_at_cursor_x11(self, win_w, win_h):
+        """Use GTK window.move() to position at cursor (X11)."""
+        display = Gdk.Display.get_default()
+        if not display:
+            return
+        seat = display.get_default_seat()
+        if not seat:
+            return
+        pointer = seat.get_pointer()
+        if not pointer:
+            return
+        screen, cx, cy = pointer.get_position()
+
+        monitor = display.get_monitor_at_point(cx, cy)
+        if monitor:
+            geo = monitor.get_geometry()
+        else:
+            geo = Gdk.Rectangle()
+            geo.x, geo.y = 0, 0
+            geo.width = screen.get_width() if screen else 1920
+            geo.height = screen.get_height() if screen else 1080
+
+        x = max(geo.x, min(cx, geo.x + geo.width - win_w))
+        y = max(geo.y, min(cy, geo.y + geo.height - win_h))
+        self.window.move(x, y)
 
     def _restore_window_from_tray(self):
         """Restore and show the window, even if minimized to tray."""
