@@ -169,9 +169,15 @@ format-check:
     @echo "{{ BLUE }}-> Checking code formatting...{{ RESET }}"
     {{ VENV_ACTIVATE }}ruff format --check .
 
-# Run full quality pipeline - format, lint, type-check (group: 'qa')
+# Run tests with pytest (group: 'qa')
 [group('qa')]
-qa: format lint type-check
+test *args:
+    @echo "{{ BLUE }}-> Running tests...{{ RESET }}"
+    python -m pytest tests/ {{ args }}
+
+# Run full quality pipeline - format, lint, type-check, test (group: 'qa')
+[group('qa')]
+qa: format lint type-check test
     @echo "{{ GREEN }}✓ Quality assurance complete!{{ RESET }}"
 
 # ============================================================================
