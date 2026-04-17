@@ -43,6 +43,9 @@ export DESKTOP_DEST_DIR := SHARE_DIR / "applications"
 # Build directories
 
 export BUILD_DIR := "dist"
+export WHEEL_GLOB := BUILD_DIR + "/*.whl"
+export PEP517_BUILD_DIR := "build"
+export EGG_INFO_DIR := PACKAGE_DIR + ".egg-info"
 export NUITKA_DIST_DIR := APP_NAME + ".dist"
 export NUITKA_BINARY := APP_NAME
 
@@ -175,70 +178,89 @@ qa: format lint type-check
 # Build Recipes (group: 'build')
 # ============================================================================
 
-# Ensure Python 3.13 venv exists using uv (downloads Python if needed)
+# Verify python-build / python-installer / setuptools / wheel are available
 [group('build')]
-_ensure-python:
+_ensure-build-tools:
     #!/usr/bin/env bash
     set -euo pipefail
-    PYTHON_VERSION=$(venv/bin/python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "none")
-    if [ ! -d "venv" ] || [ "$PYTHON_VERSION" != "3.13" ]; then
-        echo "{{ YELLOW }}-> Creating venv with Python 3.13 (downloading if needed)...{{ RESET }}"
-        rm -rf venv
-        uv venv --python 3.13 venv
-    fi
-    if ! venv/bin/python -c "import nuitka" 2>/dev/null; then
-        echo "{{ YELLOW }}-> Installing nuitka...{{ RESET }}"
-        uv pip install nuitka --python venv/bin/python
-    fi
-    if ! venv/bin/python -c "import gi" 2>/dev/null; then
-        echo "{{ YELLOW }}-> Installing PyGObject...{{ RESET }}"
-        uv pip install PyGObject --python venv/bin/python
+    missing=()
+    for mod in build installer setuptools wheel; do
+        if ! python3 -c "import $mod" 2>/dev/null; then
+            missing+=("$mod")
+        fi
+    done
+    if [ "${#missing[@]}" -ne 0 ]; then
+        echo "{{ YELLOW }}-> Missing Python build modules: ${missing[*]}{{ RESET }}"
+        echo "  On Arch:    sudo pacman -S python-build python-installer python-setuptools python-wheel"
+        echo "  On Debian:  sudo apt install python3-build python3-installer python3-setuptools python3-wheel"
+        exit 1
     fi
 
-# Build standalone binary using Nuitka (group: 'build')
+# Build a Python wheel via PEP 517 (group: 'build')
 [group('build')]
-build: clean-build _ensure-python
-    @echo "{{ BLUE }}-> Building standalone binary with Nuitka...{{ RESET }}"
-    @echo "{{ YELLOW }}  This may take a few minutes...{{ RESET }}"
-    venv/bin/python -m nuitka {{ NUITKA_OPTS }} {{ APP_SCRIPT }}
-    @if [ -f "{{ BUILD_DIR }}/{{ APP_NAME }}.bin" ]; then \
-        mv "{{ BUILD_DIR }}/{{ APP_NAME }}.bin" "{{ BUILD_DIR }}/{{ APP_NAME }}"; \
-    fi
-    @echo "{{ GREEN }}✓ Build complete: {{ BUILD_DIR }}/{{ APP_NAME }}{{ RESET }}"
+build: clean-build _ensure-build-tools
+    @echo "{{ BLUE }}-> Building wheel via PEP 517 (no isolation)...{{ RESET }}"
+    python3 -m build --wheel --no-isolation
+    @echo "{{ GREEN }}✓ Build complete: {{ BUILD_DIR }}/clipse_gui-{{ VERSION }}-py3-none-any.whl{{ RESET }}"
 
-# Build and verify the binary works (group: 'build')
+# Build and verify the wheel exists (group: 'build')
 [group('build')]
 build-verify: build
     @echo "{{ BLUE }}-> Verifying build...{{ RESET }}"
-    @if [ -f "{{ BUILD_DIR }}/{{ APP_NAME }}" ]; then \
-        echo "{{ GREEN }}✓ Binary exists and is ready for installation{{ RESET }}"; \
-        ls -lh {{ BUILD_DIR }}/{{ APP_NAME }}; \
+    @wheel=$(ls {{ WHEEL_GLOB }} 2>/dev/null | head -1); \
+    if [ -n "$wheel" ]; then \
+        echo "{{ GREEN }}✓ Wheel exists and is ready for installation{{ RESET }}"; \
+        ls -lh "$wheel"; \
     else \
-        echo "{{ YELLOW }}✗ Binary not found at expected location{{ RESET }}"; \
+        echo "{{ YELLOW }}✗ Wheel not found in {{ BUILD_DIR }}/{{ RESET }}"; \
         exit 1; \
     fi
+
+# Legacy: build standalone Nuitka binary (kept for non-pacman distribution)
+[group('build')]
+build-nuitka: clean-build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "{{ YELLOW }}-> Building Nuitka onefile binary (legacy path)...{{ RESET }}"
+    echo "{{ YELLOW }}   Note: bundles gi/overrides; can break against newer system GLib (#13, #14).{{ RESET }}"
+    if ! command -v uv &>/dev/null; then
+        echo "{{ YELLOW }}-> uv not found; this recipe needs uv to bootstrap the build venv.{{ RESET }}"
+        exit 1
+    fi
+    PYTHON_VERSION=$(venv/bin/python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "none")
+    if [ ! -d "venv" ] || [ "$PYTHON_VERSION" != "3.13" ]; then
+        rm -rf venv
+        uv venv --python 3.13 venv
+    fi
+    venv/bin/python -c "import nuitka" 2>/dev/null || uv pip install nuitka --python venv/bin/python
+    venv/bin/python -c "import gi" 2>/dev/null || uv pip install PyGObject --python venv/bin/python
+    venv/bin/python -m nuitka {{ NUITKA_OPTS }} {{ APP_SCRIPT }}
+    if [ -f "{{ BUILD_DIR }}/{{ APP_NAME }}.bin" ]; then
+        mv "{{ BUILD_DIR }}/{{ APP_NAME }}.bin" "{{ BUILD_DIR }}/{{ APP_NAME }}"
+    fi
+    echo "{{ GREEN }}✓ Nuitka binary built: {{ BUILD_DIR }}/{{ APP_NAME }}{{ RESET }}"
 
 # ============================================================================
 # Installation Recipes (group: 'install')
 # ============================================================================
 
-# Install binary and assets system-wide - requires sudo (group: 'install')
+# Install wheel + assets system-wide via python-installer - bypasses pacman, requires sudo (group: 'install')
 [group('install')]
 install: build verify-prefix
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "{{ BLUE }}-> Installing {{ APP_NAME }} v{{ VERSION }}...{{ RESET }}"
+    echo "{{ BLUE }}-> Installing {{ APP_NAME }} v{{ VERSION }} via python-installer...{{ RESET }}"
+    echo "{{ YELLOW }}   Note: this bypasses pacman; use 'just uninstall' to remove cleanly.{{ RESET }}"
 
-    # Remove old installation and copy new one to /opt
-    echo "Installing to {{ APP_DIR }}..."
-    sudo rm -rf "{{ APP_DIR }}"
-    sudo mkdir -p "{{ APP_DIR }}"
-    sudo cp "{{ BUILD_DIR }}/{{ APP_NAME }}" "{{ APP_DIR }}/{{ APP_NAME }}"
-    sudo chmod +x "{{ APP_DIR }}/{{ APP_NAME }}"
+    wheel=$(ls {{ WHEEL_GLOB }} 2>/dev/null | head -1)
+    if [ -z "$wheel" ]; then
+        echo "{{ YELLOW }}✗ No wheel found in {{ BUILD_DIR }}/. Run 'just build' first.{{ RESET }}"
+        exit 1
+    fi
 
-    # Create symlink
-    echo "Creating symlink..."
-    sudo ln -sf "{{ APP_DIR }}/{{ APP_NAME }}" "{{ BIN_DIR }}/{{ APP_NAME }}"
+    # python-installer drops the entry-point script in {{ BIN_DIR }}/{{ APP_NAME }}
+    # and the package under site-packages — no manual /opt copy needed.
+    sudo python3 -m installer --prefix="{{ PREFIX }}" "$wheel"
 
     # Install icon if present
     if [ -f "{{ ICON_FILE }}" ]; then
@@ -260,7 +282,7 @@ install: build verify-prefix
     echo -e "{{ GREEN }}✓ Installation complete!{{ RESET }}"
     echo "  Run with: {{ BOLD }}{{ APP_NAME }}{{ RESET }} or from your applications menu"
 
-# Uninstall the application [confirm] (group: 'install')
+# Uninstall the application - reconstructs wheel manifest then removes files [confirm] (group: 'install')
 [confirm("Are you sure you want to uninstall clipse-gui?")]
 [group('install')]
 uninstall:
@@ -268,10 +290,25 @@ uninstall:
     set -euo pipefail
     echo "{{ YELLOW }}-> Uninstalling {{ APP_NAME }}...{{ RESET }}"
 
-    sudo rm -f "{{ BIN_DIR }}/{{ APP_NAME }}"
-    sudo rm -rf "{{ APP_DIR }}"
-    sudo rm -f "{{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
+    wheel=$(ls {{ WHEEL_GLOB }} 2>/dev/null | head -1)
+    if [ -n "$wheel" ]; then
+        manifest_root=$(mktemp -d)
+        trap "rm -rf '$manifest_root'" EXIT
+        python3 -m installer --destdir="$manifest_root" --prefix="{{ PREFIX }}" "$wheel" 2>/dev/null
+        # Remove every file the wheel would have installed
+        find "$manifest_root" -type f | sed "s|^$manifest_root||" | while read -r f; do
+            sudo rm -f "$f"
+        done
+        # Drop empty package dirs
+        sudo find "{{ PREFIX }}/lib" -depth -type d -name "{{ PACKAGE_DIR }}*" -empty -exec rmdir {} + 2>/dev/null || true
+    else
+        echo "{{ YELLOW }}⚠ No wheel found; falling back to best-effort path cleanup.{{ RESET }}"
+        sudo rm -f "{{ BIN_DIR }}/{{ APP_NAME }}"
+        sudo find "{{ PREFIX }}/lib" -maxdepth 4 -type d -name "{{ PACKAGE_DIR }}*" -exec rm -rf {} + 2>/dev/null || true
+    fi
 
+    # Assets installed outside the wheel
+    sudo rm -f "{{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
     if [ -f "{{ ICON_DEST_DIR }}/{{ APP_NAME }}.png" ]; then
         echo "Removing icon..."
         sudo rm -f "{{ ICON_DEST_DIR }}/{{ APP_NAME }}.png"
@@ -300,12 +337,26 @@ install-hooks:
 # Dry-run install - show what would be installed (group: 'install')
 [group('install')]
 dry-install: build
-    @echo "{{ BLUE }}-> Dry-run install (would install to {{ PREFIX }}):{{ RESET }}"
-    @echo "  Binary: {{ BUILD_DIR }}/{{ NUITKA_BINARY }} → {{ BIN_DIR }}/{{ APP_NAME }}"
-    @echo "  Icon:   {{ ICON_FILE }} → {{ ICON_DEST_DIR }}/{{ APP_NAME }}.png"
-    @echo "  Desktop: {{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
-    @echo ""
-    @echo "{{ YELLOW }}Run 'just install' to perform actual installation{{ RESET }}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "{{ BLUE }}-> Dry-run install (would install to {{ PREFIX }}):{{ RESET }}"
+    wheel=$(ls {{ WHEEL_GLOB }} 2>/dev/null | head -1)
+    if [ -z "$wheel" ]; then
+        echo "{{ YELLOW }}✗ No wheel found in {{ BUILD_DIR }}/.{{ RESET }}"
+        exit 1
+    fi
+    manifest_root=$(mktemp -d)
+    trap "rm -rf '$manifest_root'" EXIT
+    python3 -m installer --destdir="$manifest_root" --prefix="{{ PREFIX }}" "$wheel" 2>/dev/null
+    echo ""
+    echo "{{ BOLD }}Files from wheel ($wheel):{{ RESET }}"
+    find "$manifest_root" -type f | sed "s|^$manifest_root|  |" | sort
+    echo ""
+    echo "{{ BOLD }}Additional assets:{{ RESET }}"
+    echo "  {{ ICON_FILE }} → {{ ICON_DEST_DIR }}/{{ APP_NAME }}.png"
+    echo "  {{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
+    echo ""
+    echo "{{ YELLOW }}Run 'just install' to perform actual installation{{ RESET }}"
 
 # ============================================================================
 # Version Management Recipes (group: 'version')
@@ -518,7 +569,7 @@ version-suggest:
 [group('clean')]
 clean-build:
     @echo "{{ BLUE }}-> Cleaning build files...{{ RESET }}"
-    rm -rf {{ BUILD_DIR }}/ {{ NUITKA_DIST_DIR }}/ *.spec *.build/
+    rm -rf {{ BUILD_DIR }}/ {{ PEP517_BUILD_DIR }}/ {{ EGG_INFO_DIR }}/ {{ NUITKA_DIST_DIR }}/ *.spec *.build/
     @echo "{{ GREEN }}✓ Build files cleaned{{ RESET }}"
 
 # Clean Python cache files (group: 'clean')
@@ -567,15 +618,18 @@ info:
     @echo ""
     @echo "{{ BOLD }}Status:{{ RESET }}"
     @echo "  Venv:       {{ if path_exists("venv") == "true" { "✓ present" } else { "✗ not found" } }}"
-    @echo "  Build:      {{ if path_exists(BUILD_DIR / NUITKA_BINARY) == "true" { "✓ available" } else { "✗ not built" } }}"
+    @echo -n "  Wheel:      "
+    @if ls {{ WHEEL_GLOB }} >/dev/null 2>&1; then echo "✓ $(ls {{ WHEEL_GLOB }} | head -1)"; else echo "✗ not built (run 'just build')"; fi
+    @echo "  Nuitka bin: {{ if path_exists(BUILD_DIR / NUITKA_BINARY) == "true" { "✓ available" } else { "✗ not built" } }}"
 
 # Show installation paths - where files would be installed (group: 'info')
 [group('info')]
 paths:
     @echo "{{ BOLD }}Installation Paths (PREFIX={{ PREFIX }}):{{ RESET }}"
-    @echo "  Binary:     {{ BIN_DIR }}/{{ APP_NAME }}"
-    @echo "  Icon:       {{ ICON_DEST_DIR }}/{{ APP_NAME }}.png"
-    @echo "  Desktop:    {{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
+    @echo "  Entry point:  {{ BIN_DIR }}/{{ APP_NAME }}    (generated by python-installer)"
+    @echo "  Package:      {{ PREFIX }}/lib/python3.X/site-packages/{{ PACKAGE_DIR }}/"
+    @echo "  Icon:         {{ ICON_DEST_DIR }}/{{ APP_NAME }}.png"
+    @echo "  Desktop:      {{ DESKTOP_DEST_DIR }}/{{ APP_NAME }}.desktop"
 
 # ============================================================================
 # Private Helper Recipes
@@ -599,23 +653,6 @@ _generate-desktop:
     StartupNotify=true
     StartupWMClass=org.d7om.ClipseGUI
     EOF
-
-# Build a standalone binary with Nuitka (group: 'build')
-[group('build')]
-nuitka:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p dist
-    python3 -m nuitka \
-        --onefile \
-        --linux-onefile-compression=none \
-        --output-dir=dist \
-        --output-filename=clipse-gui.bin \
-        --include-package=clipse_gui \
-        --include-package-data=clipse_gui \
-        --enable-plugin=gi \
-        --noinclude-default-mode=nofollow \
-        clipse-gui.py
 
 # Verify prefix directory exists and is writable (private)
 [private]

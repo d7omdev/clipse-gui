@@ -37,12 +37,24 @@ def build_main_window_content() -> dict:
 
     # --- Header ---
     header_box = Gtk.Box(
-        orientation=Gtk.Orientation.HORIZONTAL, spacing=5 if not COMPACT_MODE else 1
+        orientation=Gtk.Orientation.HORIZONTAL, spacing=8 if not COMPACT_MODE else 4
     )
-    search_entry = Gtk.SearchEntry(placeholder_text="Search...")
+    header_box.get_style_context().add_class("header-bar")
+
+    search_entry = Gtk.SearchEntry(placeholder_text="Search clipboard…")
+    search_entry.get_style_context().add_class("header-search")
+    search_entry.set_hexpand(True)
     header_box.pack_start(search_entry, True, True, 0)
 
-    pin_filter_button = Gtk.ToggleButton(label="Pinned Only")
+    pin_filter_button = Gtk.ToggleButton()
+    pin_filter_button.set_tooltip_text("Show pinned items only (Tab)")
+    pin_filter_button.get_style_context().add_class("pin-toggle")
+    pin_inner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    pin_icon_img = Gtk.Image.new_from_icon_name("starred-symbolic", Gtk.IconSize.BUTTON)
+    pin_label = Gtk.Label(label="Pinned")
+    pin_inner.pack_start(pin_icon_img, False, False, 0)
+    pin_inner.pack_start(pin_label, False, False, 0)
+    pin_filter_button.add(pin_inner)
     if not COMPACT_MODE:
         header_box.pack_start(pin_filter_button, False, False, 0)
 
