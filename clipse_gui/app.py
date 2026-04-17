@@ -243,16 +243,19 @@ class ClipseGuiApplication(Gtk.Application):
         return None
 
     def _position_layer_shell(self, cx, cy):
-        """Use gtk-layer-shell to place the window at (cx, cy)."""
-        GtkLayerShell.init_for_window(self.window)
-        GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
-        GtkLayerShell.set_keyboard_mode(
-            self.window, GtkLayerShell.KeyboardMode.ON_DEMAND
-        )
+        """Use gtk-layer-shell to place the window at (cx, cy).
 
-        # Anchor top-left, push to cursor via margins
-        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.TOP, True)
-        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.LEFT, True)
+        init_for_window is only called once; subsequent calls just update margins.
+        """
+        if not GtkLayerShell.is_layer_window(self.window):
+            GtkLayerShell.init_for_window(self.window)
+            GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
+            GtkLayerShell.set_keyboard_mode(
+                self.window, GtkLayerShell.KeyboardMode.ON_DEMAND
+            )
+            GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.TOP, True)
+            GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.LEFT, True)
+
         GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.TOP, cy)
         GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.LEFT, cx)
         log.debug(f"Layer-shell positioned at cursor ({cx}, {cy})")
@@ -285,14 +288,23 @@ class ClipseGuiApplication(Gtk.Application):
 
     def _restore_window_from_tray(self):
         """Restore and show the window, even if minimized to tray."""
-        if self.window:
-            # Restore from tray if minimized there
-            if self.tray_manager:
-                self.tray_manager._restore_window()
-            else:
-                # Fallback if no tray manager
-                self.window.present()
-                self.window.show_all()
+        if not self.window:
+            return
+
+        # Reposition at cursor in compact mode before showing
+        compact_mode_on = constants.config.getboolean(
+            "General", "compact_mode", fallback=False
+        )
+        if compact_mode_on:
+            win_w = int(DEFAULT_WINDOW_WIDTH * 0.6)
+            win_h = int(DEFAULT_WINDOW_HEIGHT * 0.6)
+            self._position_at_cursor(win_w, win_h)
+
+        if self.tray_manager:
+            self.tray_manager._restore_window()
+        else:
+            self.window.present()
+            self.window.show_all()
 
     def do_shutdown(self):
         """Called when the application is shutting down."""
