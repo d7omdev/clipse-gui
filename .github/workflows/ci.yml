@@ -21,10 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install GTK3 + GObject introspection
+      - name: Install GTK3 + GObject introspection + pytest
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -33,8 +30,8 @@ jobs:
             gir1.2-gdkpixbuf-2.0 \
             gir1.2-pango-1.0 \
             python3-gi \
+            python3-pytest \
             libgtk-layer-shell-dev \
             gir1.2-gtklayershell-0.1
-      - run: pip install pytest
       - name: Run tests
-        run: python -m pytest tests/ -v
+        run: python3 -m pytest tests/ -v
