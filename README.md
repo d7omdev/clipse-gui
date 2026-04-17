@@ -20,6 +20,20 @@ A GTK3 GUI for the [clipse](https://github.com/savedra1/clipse) clipboard manage
 - Compact mode, hover-to-select
 - Multi-select mode
 - Auto-paste on Enter (optional)
+- System tray with quick-paste menu
+
+## Documentation
+
+Full docs live in [`docs/`](docs/README.md):
+
+- [Installation](docs/installation.md) — dependencies, AUR, source build
+- [Getting Started](docs/getting-started.md) — daemon setup, first launch, core workflow
+- [Keybindings](docs/keybindings.md) — every shortcut grouped by context
+- [Configuration](docs/configuration.md) — every `settings.ini` option explained
+- [Theming](docs/theming.md) — colors, radius, CSS customization
+- [Tray Integration](docs/tray.md) — tray menu, quick-paste, troubleshooting
+- [Window Manager Setup](docs/wm-integration.md) — Hyprland, Sway, Niri, GNOME, KDE, XMonad
+- [Troubleshooting](docs/troubleshooting.md) — paste issues, GTK errors, log capture
 
 ## Installation
 
