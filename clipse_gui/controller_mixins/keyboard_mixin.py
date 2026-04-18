@@ -4,7 +4,12 @@ import logging
 
 from gi.repository import Gdk, GLib, Gtk
 
-from ..constants import ENTER_TO_PASTE, OPEN_LINKS_WITH_BROWSER, config
+from ..constants import (
+    CLEAR_SEARCH_ON_ESCAPE,
+    ENTER_TO_PASTE,
+    OPEN_LINKS_WITH_BROWSER,
+    config,
+)
 from ..ui_components import show_help_window, show_settings_window
 
 log = logging.getLogger(__name__)
@@ -63,7 +68,7 @@ class KeyboardMixin:
             self.toggle_selection_mode()
             return True
 
-        if self.search_entry.get_text():
+        if CLEAR_SEARCH_ON_ESCAPE and self.search_entry.get_text():
             self.search_entry.set_text("")
 
         def unfocus():
@@ -273,7 +278,7 @@ class KeyboardMixin:
         if self.selection_mode:
             self.toggle_selection_mode()
             return True
-        if self.search_entry.get_text():
+        if CLEAR_SEARCH_ON_ESCAPE and self.search_entry.get_text():
             self.search_entry.set_text("")
             self.list_box.grab_focus()
             return True

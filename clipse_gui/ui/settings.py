@@ -7,6 +7,7 @@ from gi.repository import Gdk, Gtk
 from ..constants import (
     ACCENT_COLOR,
     BORDER_RADIUS,
+    CLEAR_SEARCH_ON_ESCAPE,
     COMPACT_MODE,
     ENTER_TO_PASTE,
     HIGHLIGHT_SEARCH,
@@ -152,12 +153,23 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         "Render image URLs, SVGs, and base64 images as thumbnails in the list",
     )
 
+    # Clear search on Escape setting
+    clear_search_switch = Gtk.Switch()
+    clear_search_switch.set_active(CLEAR_SEARCH_ON_ESCAPE)
+    clear_search_box = _create_setting_row(
+        "Clear search on Escape:",
+        clear_search_switch,
+        "When off, Escape only unfocuses the search bar and keeps the typed query "
+        "so you can navigate results with j/k",
+    )
+
     general_box.pack_start(compact_box, False, False, 0)
     general_box.pack_start(hover_box, False, False, 0)
     general_box.pack_start(enter_paste_box, False, False, 0)
     general_box.pack_start(highlight_search_box, False, False, 0)
     general_box.pack_start(open_links_box, False, False, 0)
     general_box.pack_start(rich_content_box, False, False, 0)
+    general_box.pack_start(clear_search_box, False, False, 0)
     general_frame.add(general_box)
     general_tab.pack_start(general_frame, False, False, 0)
 
@@ -410,6 +422,18 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
 
         constants.PREVIEW_RICH_CONTENT = switch.get_active()
 
+    def on_clear_search_switch_toggled(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("General"):
+            config.config.add_section("General")
+        config.config.set("General", "clear_search_on_escape", str(switch.get_active()))
+        config._save_config()
+        import clipse_gui.constants as constants
+
+        constants.CLEAR_SEARCH_ON_ESCAPE = switch.get_active()
+
     def on_tray_switch_toggled(switch, state):
         nonlocal settings_changed
         settings_changed = True
@@ -560,6 +584,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     highlight_search_switch.connect("state-set", on_highlight_search_switch_toggled)
     open_links_switch.connect("state-set", on_open_links_switch_toggled)
     rich_content_switch.connect("state-set", on_rich_content_switch_toggled)
+    clear_search_switch.connect("state-set", on_clear_search_switch_toggled)
     tray_switch.connect("state-set", on_tray_switch_toggled)
     tray_items_spin.connect("value-changed", on_tray_items_changed)
     tray_paste_switch.connect("state-set", on_tray_paste_switch_toggled)

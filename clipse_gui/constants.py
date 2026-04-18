@@ -32,6 +32,7 @@ DEFAULT_SETTINGS = {
         "tray_paste_on_select": "True",
         "open_links_with_browser": "True",
         "preview_rich_content": "True",
+        "clear_search_on_escape": "True",
     },
     "Style": {
         "border_radius": "6",
@@ -101,6 +102,9 @@ OPEN_LINKS_WITH_BROWSER = config.getboolean(
     "General", "open_links_with_browser", fallback=True
 )
 PREVIEW_RICH_CONTENT = config.getboolean("General", "preview_rich_content", fallback=True)
+CLEAR_SEARCH_ON_ESCAPE = config.getboolean(
+    "General", "clear_search_on_escape", fallback=True
+)
 
 # Style settings
 BORDER_RADIUS = config.getint("Style", "border_radius", fallback=6)
