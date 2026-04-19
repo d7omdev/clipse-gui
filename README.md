@@ -2,6 +2,8 @@
 
 A GTK3 GUI for the [clipse](https://github.com/savedra1/clipse) clipboard manager.
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I01BJB4B)
+
 ![Screenshot](docs/screenshot.png)
 
 <details>
@@ -127,3 +129,5 @@ exec-once = clipse -listen  # Hyprland
 ## License
 
 MIT - See [LICENSE](LICENSE)
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I01BJB4B)
