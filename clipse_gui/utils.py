@@ -25,6 +25,17 @@ def format_date(date_str):
         yesterday = today - timedelta(days=1)
         dt_date = dt.date()  # Compare dates only
 
+        delta_seconds = (now - dt).total_seconds()
+        if 0 <= delta_seconds < 3600:
+            clock = dt.strftime("%H:%M")
+            if delta_seconds < 5:
+                return f"just now (at {clock})"
+            if delta_seconds < 60:
+                return f"{int(delta_seconds)} seconds ago (at {clock})"
+            minutes = int(delta_seconds // 60)
+            unit = "minute" if minutes == 1 else "minutes"
+            return f"{minutes} {unit} ago (at {clock})"
+
         if dt_date == today:
             return f"Today at {dt.strftime('%H:%M')}"
         elif dt_date == yesterday:
