@@ -45,18 +45,37 @@ class ClipseGuiApplication(Gtk.Application):
         self._install_signal_handlers()
 
     def _install_signal_handlers(self):
-        """Wire SIGINT (Ctrl+C) and SIGTERM into the GLib main loop for graceful exit."""
+        """Wire SIGINT (Ctrl+C) and SIGTERM into the main loop for graceful exit.
+
+        Prefer GLib.unix_signal_add — it integrates with the GLib loop directly.
+        Some PyGObject builds (e.g. certain pip wheels) don't expose it, so fall
+        back to Python's signal module, deferring the quit onto the main loop via
+        idle_add so it runs on the main thread, not inside the signal context.
+        """
         def _on_signal(sig_name):
             log.info(f"{sig_name} received — quitting application gracefully.")
             self.quit()
             return GLib.SOURCE_REMOVE
 
-        GLib.unix_signal_add(
-            GLib.PRIORITY_DEFAULT, signal.SIGINT, _on_signal, "SIGINT"
-        )
-        GLib.unix_signal_add(
-            GLib.PRIORITY_DEFAULT, signal.SIGTERM, _on_signal, "SIGTERM"
-        )
+        if hasattr(GLib, "unix_signal_add"):
+            GLib.unix_signal_add(
+                GLib.PRIORITY_DEFAULT, signal.SIGINT, _on_signal, "SIGINT"
+            )
+            GLib.unix_signal_add(
+                GLib.PRIORITY_DEFAULT, signal.SIGTERM, _on_signal, "SIGTERM"
+            )
+        else:
+            log.debug(
+                "GLib.unix_signal_add unavailable in this PyGObject build; "
+                "using Python signal fallback."
+            )
+
+            def _py_handler(signum, _frame):
+                name = signal.Signals(signum).name
+                GLib.idle_add(_on_signal, name)
+
+            signal.signal(signal.SIGINT, _py_handler)
+            signal.signal(signal.SIGTERM, _py_handler)
 
     def do_activate(self):
         """Called when the application is launched. Creates the main window and controller."""
