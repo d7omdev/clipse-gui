@@ -6,6 +6,7 @@ from gi.repository import Gdk, Gtk
 
 from ..constants import (
     ACCENT_COLOR,
+    BACKGROUND_TRANSPARENT,
     BORDER_RADIUS,
     CLEAR_SEARCH_ON_ESCAPE,
     COMPACT_MODE,
@@ -67,6 +68,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
                          update_style_cb=None, style_defaults=None):
     """Creates and shows the enhanced settings window with sections."""
     settings_window = Gtk.Window(title="Settings")
+    settings_window.get_style_context().add_class("settings-window")
     settings_window.set_type_hint(Gdk.WindowTypeHint.DIALOG)
     settings_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
     settings_window.set_transient_for(parent_window)
@@ -259,6 +261,16 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         "Corner roundness applied to buttons, lists, and dialogs",
     )
 
+    # Transparent background
+    transparent_switch = Gtk.Switch()
+    transparent_switch.set_active(BACKGROUND_TRANSPARENT)
+    transparent_row = _create_setting_row(
+        "Transparent background:",
+        transparent_switch,
+        "Let the list and settings defer to the window background "
+        "(e.g. a compositor blur). Disable for a solid theme-colored surface.",
+    )
+
     # Accent Color
     accent_button = Gtk.ColorButton()
     accent_rgba = Gdk.RGBA()
@@ -293,6 +305,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     )
 
     appearance_box.pack_start(radius_row, False, False, 0)
+    appearance_box.pack_start(transparent_row, False, False, 0)
     appearance_box.pack_start(accent_row, False, False, 0)
     appearance_box.pack_start(selection_row, False, False, 0)
     appearance_box.pack_start(visual_row, False, False, 0)
@@ -491,6 +504,19 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         if update_style_cb:
             update_style_cb(border_radius=value)
 
+    def on_transparent_changed(switch, state):
+        nonlocal settings_changed
+        settings_changed = True
+        update_button_states()
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        config.config.set("Style", "background_transparent", str(state))
+        config._save_config()
+        import clipse_gui.constants as constants
+        constants.BACKGROUND_TRANSPARENT = state
+        if update_style_cb:
+            update_style_cb(transparent=state)
+
     def on_accent_color_changed(button):
         nonlocal settings_changed
         settings_changed = True
@@ -541,6 +567,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
             return
         # Reset to defaults
         radius_spin.set_value(style_defaults.get("border_radius", 6))
+        transparent_switch.set_active(style_defaults.get("background_transparent", False))
 
         accent_rgba = Gdk.RGBA()
         accent_rgba.parse(style_defaults.get("accent_color", "#ffcc00"))
@@ -567,6 +594,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         constants.ACCENT_COLOR = style_defaults.get("accent_color", "#ffcc00")
         constants.SELECTION_COLOR = style_defaults.get("selection_color", "#4a90e2")
         constants.VISUAL_MODE_COLOR = style_defaults.get("visual_mode_color", "#9b59b6")
+        constants.BACKGROUND_TRANSPARENT = style_defaults.get("background_transparent", False)
 
         if update_style_cb:
             update_style_cb(
@@ -574,6 +602,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
                 accent_color=constants.ACCENT_COLOR,
                 selection_color=constants.SELECTION_COLOR,
                 visual_mode_color=constants.VISUAL_MODE_COLOR,
+                transparent=constants.BACKGROUND_TRANSPARENT,
             )
 
     # Connect signals
@@ -591,6 +620,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
 
     # Style signals
     radius_spin.connect("value-changed", on_radius_changed)
+    transparent_switch.connect("state-set", on_transparent_changed)
     accent_button.connect("color-set", on_accent_color_changed)
     selection_button.connect("color-set", on_selection_color_changed)
     visual_button.connect("color-set", on_visual_color_changed)

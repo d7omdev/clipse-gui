@@ -53,12 +53,14 @@ class StyleMixin:
             accent_color=constants.ACCENT_COLOR,
             selection_color=constants.SELECTION_COLOR,
             visual_mode_color=constants.VISUAL_MODE_COLOR,
+            transparent=constants.BACKGROUND_TRANSPARENT,
         )
         log.debug(f"Generated CSS with border_radius={constants.BORDER_RADIUS}")
         return css
 
     def update_style_css(self, border_radius=None, accent_color=None,
-                         selection_color=None, visual_mode_color=None):
+                         selection_color=None, visual_mode_color=None,
+                         transparent=None):
         """Update CSS styles on-the-fly."""
         # Update global constants
         import clipse_gui.constants as constants
@@ -71,6 +73,8 @@ class StyleMixin:
             constants.SELECTION_COLOR = selection_color
         if visual_mode_color is not None:
             constants.VISUAL_MODE_COLOR = visual_mode_color
+        if transparent is not None:
+            constants.BACKGROUND_TRANSPARENT = transparent
 
         # Regenerate and apply CSS
         if hasattr(self, "style_provider"):

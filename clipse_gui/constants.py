@@ -42,6 +42,7 @@ DEFAULT_SETTINGS = {
         "hover_color": "#4a90e2",
         "hover_bg_color": "#4a90e2",
         "visual_mode_color": "#9b59b6",
+        "background_transparent": "False",
     },
     "Commands": {
         "copy_tool_cmd": "wl-copy",
@@ -114,6 +115,9 @@ SELECTION_BG_COLOR = config.get("Style", "selection_bg_color", fallback="#4a90e2
 HOVER_COLOR = config.get("Style", "hover_color", fallback="#4a90e2")
 HOVER_BG_COLOR = config.get("Style", "hover_bg_color", fallback="#4a90e2")
 VISUAL_MODE_COLOR = config.get("Style", "visual_mode_color", fallback="#9b59b6")
+BACKGROUND_TRANSPARENT = config.getboolean(
+    "Style", "background_transparent", fallback=False
+)
 
 COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
 X11_COPY_TOOL_CMD = config.get(
@@ -163,8 +167,16 @@ def get_app_css(
     accent_color="#ffcc00",
     selection_color="#4a90e2",
     visual_mode_color="#9b59b6",
+    transparent=False,
 ):
-    """Generate app CSS with customizable style variables."""
+    """Generate app CSS with customizable style variables.
+
+    When ``transparent`` is True, the list area and settings window defer to the
+    window background (e.g. a compositor blur via a transparent gtk.css). When
+    False (default), they paint the theme's opaque window color — keeping the
+    standard look for users without a glass setup.
+    """
+    surface_bg = "transparent" if transparent else "@theme_bg_color"
     return f"""
 .pinned-row {{
     border-left: 3px solid {accent_color};
@@ -224,15 +236,15 @@ def get_app_css(
 }}
 .timestamp {{
     font-size: 82%;
-    color: alpha(#ffffff, 0.35);
+    color: alpha(@theme_fg_color, 0.35);
     font-style: italic;
     margin-top: 2px;
 }}
 .status-label {{
-    border-top: 1px solid alpha(#ffffff, 0.07);
+    border-top: 1px solid alpha(@theme_fg_color, 0.07);
     padding-top: 5px;
     margin-top: 5px;
-    color: alpha(#ffffff, 0.4);
+    color: alpha(@theme_fg_color, 0.4);
     font-style: italic;
     font-size: 90%;
 }}
@@ -243,23 +255,23 @@ textview {{
     font-family: Monospace;
     font-weight: bold;
     font-size: 88%;
-    background-color: alpha(#ffffff, 0.07);
-    color: alpha(#ffffff, 0.75);
+    background-color: alpha(@theme_fg_color, 0.07);
+    color: alpha(@theme_fg_color, 0.75);
     padding: 2px 6px;
     border-radius: {border_radius}px;
-    border: 1px solid alpha(#ffffff, 0.12);
+    border: 1px solid alpha(@theme_fg_color, 0.12);
 }}
 
 /* Help window section styling */
 frame > box {{
-    background-color: alpha(#ffffff, 0.02);
+    background-color: alpha(@theme_fg_color, 0.02);
     border-radius: {border_radius}px;
     padding: 10px;
-    border: 1px solid alpha(#ffffff, 0.05);
+    border: 1px solid alpha(@theme_fg_color, 0.05);
 }}
 
 frame > box > label {{
-    color: alpha(#ffffff, 0.85);
+    color: alpha(@theme_fg_color, 0.85);
 }}
 
 /* Pin icon styling */
@@ -274,25 +286,43 @@ frame > box > label {{
 }}
 
 .pin-icon.unpinned {{
-    color: alpha(#ffffff, 0.25);
+    color: alpha(@theme_fg_color, 0.25);
+}}
+
+/* Transparent settings window — glass to match the main list. Overrides the
+   theme's opaque notebook/scrolledwindow/viewport fills so the compositor blur
+   shows through. The faint .settings-section frame tint below stays for card
+   definition. */
+.settings-window,
+.settings-window notebook,
+.settings-window notebook header,
+.settings-window notebook header.top,
+.settings-window notebook tabs,
+.settings-window notebook tab,
+.settings-window notebook stack,
+.settings-window scrolledwindow,
+.settings-window scrolledwindow viewport,
+.settings-window box {{
+    background-color: {surface_bg};
+    background-image: none;
 }}
 
 /* Settings window styling */
 .settings-section {{
-    border: 1px solid alpha(#ffffff, 0.1);
+    border: 1px solid alpha(@theme_fg_color, 0.1);
     border-radius: {border_radius}px;
     padding: 10px;
     margin: 5px;
 }}
 
 .settings-section > label {{
-    color: alpha(#ffffff, 0.9);
+    color: alpha(@theme_fg_color, 0.9);
     font-weight: bold;
     margin-bottom: 5px;
 }}
 
 .settings-section frame {{
-    background-color: alpha(#ffffff, 0.02);
+    background-color: alpha(@theme_fg_color, 0.02);
 }}
 
 /* Remove border from notebook (settings dialog) */
@@ -351,7 +381,7 @@ spinbutton entry:focus {{
 /* The switch track/container - always pill shaped */
 switch {{
     border-radius: 9999px;
-    background-color: alpha(#ffffff, 0.15);
+    background-color: alpha(@theme_fg_color, 0.15);
     border: none;
     outline: none;
     min-height: 24px;
@@ -407,7 +437,7 @@ spinbutton > entry:focus {{
 
 spinbutton:focus-within {{
     outline: none;
-    box-shadow: 0 0 0 1px alpha({selection_color}, 0.45);
+    box-shadow: none;
 }}
 
 /* Spinbutton up/down buttons */
@@ -423,7 +453,7 @@ spinbutton button {{
 }}
 
 spinbutton button:hover {{
-    background-color: alpha(#ffffff, 0.08);
+    background-color: alpha(@theme_fg_color, 0.08);
 }}
 
 spinbutton button:focus,
@@ -458,6 +488,20 @@ scrollbar slider {{
    MAIN WINDOW SPECIFIC STYLING
    ============================================ */
 
+/* Transparent list area — let the window's background (e.g. a compositor
+   blur via a transparent gtk.css) show through instead of the theme's
+   opaque list/viewport background. Row hover/selection tints below still
+   apply on top, since they have higher specificity. */
+.main-window scrolledwindow,
+.main-window scrolledwindow viewport,
+.main-window list,
+.main-window listbox,
+.main-window list row,
+.main-window listbox row {{
+    background-color: {surface_bg};
+    background-image: none;
+}}
+
 /* List box and row focus/selection styling */
 .main-window list,
 .main-window listbox {{
@@ -484,12 +528,12 @@ scrollbar slider {{
 
 /* URL / link item styling */
 .url-link {{
-    color: #5b9cf6;
+    color: @theme_selected_bg_color;
 }}
 
 .url-badge {{
     font-size: 78%;
-    color: alpha(#ffffff, 0.45);
+    color: alpha(@theme_fg_color, 0.45);
     font-style: italic;
 }}
 
@@ -515,10 +559,10 @@ scrollbar slider {{
     min-height: 34px;
     padding: 0 14px;
     border-radius: {border_radius}px;
-    border: 1px solid alpha(#ffffff, 0.12);
-    background-color: alpha(#ffffff, 0.04);
+    border: 1px solid alpha(@theme_fg_color, 0.12);
+    background-color: alpha(@theme_fg_color, 0.04);
     background-image: none;
-    color: alpha(#ffffff, 0.72);
+    color: alpha(@theme_fg_color, 0.72);
     font-weight: 500;
     transition: background-color 0.18s ease,
                 border-color 0.18s ease,
@@ -526,9 +570,9 @@ scrollbar slider {{
 }}
 
 .main-window .pin-toggle:hover {{
-    background-color: alpha(#ffffff, 0.09);
-    border-color: alpha(#ffffff, 0.20);
-    color: alpha(#ffffff, 0.95);
+    background-color: alpha(@theme_fg_color, 0.09);
+    border-color: alpha(@theme_fg_color, 0.20);
+    color: alpha(@theme_fg_color, 0.95);
 }}
 
 .main-window .pin-toggle:checked,
@@ -567,7 +611,7 @@ colorbutton button {{
 
 
 # Default CSS (for backwards compatibility)
-APP_CSS = get_app_css()
+APP_CSS = get_app_css(transparent=BACKGROUND_TRANSPARENT)
 log.debug(f"Using configuration directory: {CONFIG_DIR}")
 log.debug(f"Using configuration file: {CONFIG_FILE_PATH}")
 log.debug(f"History file path set to: {HISTORY_FILE_PATH}")

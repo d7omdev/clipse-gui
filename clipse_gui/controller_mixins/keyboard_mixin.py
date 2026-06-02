@@ -260,6 +260,7 @@ class KeyboardMixin:
             "accent_color": "#ffcc00",
             "selection_color": "#4a90e2",
             "visual_mode_color": "#9b59b6",
+            "background_transparent": False,
         }
         show_settings_window(
             self.window,
