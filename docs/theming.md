@@ -1,6 +1,38 @@
 # Theming
 
-Clipse GUI's visual style is driven by a small set of tokens in `[Style]` plus the CSS generator in `clipse_gui/constants.py:get_app_css`.
+Clipse GUI's visual style is driven by a small set of tokens in `[Style]` plus the CSS generator in `clipse_gui/constants.py:get_app_css`. On top of that, a theme file can restyle any window.
+
+## Themes
+
+A theme is a single GTK3 CSS file loaded after the generated CSS. Pick one in Settings → Style → Theme, or set it in `settings.ini`:
+
+```ini
+[Style]
+theme = name
+```
+
+Leave it empty to follow the GTK theme. `clipse-gui --theme NAME` overrides the configured theme for one run without saving it.
+
+Lookup order for `name`:
+
+1. `~/.config/clipse-gui/themes/<name>.css` — your own themes
+2. `clipse_gui/themes/<name>.css` — built-in themes shipped with the app
+
+A user file with the same name as a built-in one wins. New files are picked up the next time the Settings window opens.
+
+`~/.config/clipse-gui/custom.css` is always loaded last, regardless of the selected theme, so it is the place for small overrides that should survive switching themes.
+
+Theme changes apply live. Every window carries a class so a theme can target it: `.main-window`, `.settings-window`, `.preview-window`, `.help-window`.
+
+## Gallery
+
+Rendered with the same sample history so the palettes are comparable.
+
+<table>
+<tr><td align="center"><img src="themes/default.png" width="260" alt="Default (GTK theme)"><br><sub>Default (GTK theme)</sub></td><td align="center"><img src="themes/catppuccin-mocha.png" width="260" alt="Catppuccin Mocha"><br><sub>Catppuccin Mocha — <code>theme = catppuccin-mocha</code></sub></td><td align="center"><img src="themes/nord.png" width="260" alt="Nord"><br><sub>Nord — <code>theme = nord</code></sub></td></tr>
+<tr><td align="center"><img src="themes/gruvbox-dark.png" width="260" alt="Gruvbox Dark"><br><sub>Gruvbox Dark — <code>theme = gruvbox-dark</code></sub></td><td align="center"><img src="themes/dracula.png" width="260" alt="Dracula"><br><sub>Dracula — <code>theme = dracula</code></sub></td><td align="center"><img src="themes/tokyo-night.png" width="260" alt="Tokyo Night"><br><sub>Tokyo Night — <code>theme = tokyo-night</code></sub></td></tr>
+<tr><td align="center"><img src="themes/rose-pine.png" width="260" alt="Rose Pine"><br><sub>Rose Pine — <code>theme = rose-pine</code></sub></td><td align="center"><img src="themes/solarized-light.png" width="260" alt="Solarized Light"><br><sub>Solarized Light — <code>theme = solarized-light</code></sub></td><td align="center"><img src="themes/mono.png" width="260" alt="Mono"><br><sub>Mono — <code>theme = mono</code></sub></td></tr>
+</table>
 
 ## Settings-Driven Theming
 
@@ -11,9 +43,6 @@ Change these in `~/.config/clipse-gui/settings.ini` or the in-app Settings → A
 | `border_radius` | `6` | All rounded corners (buttons, rows, switches' tracks use pill regardless) |
 | `accent_color` | `#ffcc00` | Pin indicator, pinned row left border, active pin-filter toggle |
 | `selection_color` | `#4a90e2` | Selected-row left border, focus rings, switch `on` state |
-| `selection_bg_color` | `#4a90e2` | Reserved for future background tints |
-| `hover_color` | `#4a90e2` | Hover border color on list rows |
-| `hover_bg_color` | `#4a90e2` | Hover background tint on list rows |
 | `visual_mode_color` | `#9b59b6` | Multi-select mode indicator and selected-in-visual-mode rows |
 
 Colors accept any CSS-recognized format, but stick to `#RRGGBB` for portability.

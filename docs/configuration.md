@@ -85,6 +85,7 @@ See [Theming](theming.md) for full treatment. Keys:
 - `selection_color` — hex, default `#4a90e2`
 - `visual_mode_color` — hex, multi-select indicator, default `#9b59b6`
 - `background_transparent` — boolean, make the window background transparent (needs a compositor), default `False`
+- `theme` — name of a CSS theme from `~/.config/clipse-gui/themes/` or the built-in set, empty to follow the GTK theme, default empty
 
 ## `[Commands]`
 
@@ -174,6 +175,7 @@ accent_color = #f5a623
 selection_color = #4a90e2
 visual_mode_color = #9b59b6
 background_transparent = False
+theme =
 
 [Commands]
 copy_tool_cmd = wl-copy

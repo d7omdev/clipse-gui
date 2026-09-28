@@ -13,6 +13,22 @@ A GTK3 GUI for the [clipse](https://github.com/savedra1/clipse) clipboard manage
 
 </details>
 
+<details>
+<summary>Themes</summary>
+
+<table>
+<tr>
+<td align="center"><img src="docs/themes/catppuccin-mocha.png" width="200" alt="Catppuccin Mocha"><br><sub>Catppuccin Mocha</sub></td>
+<td align="center"><img src="docs/themes/nord.png" width="200" alt="Nord"><br><sub>Nord</sub></td>
+<td align="center"><img src="docs/themes/gruvbox-dark.png" width="200" alt="Gruvbox Dark"><br><sub>Gruvbox Dark</sub></td>
+<td align="center"><img src="docs/themes/solarized-light.png" width="200" alt="Solarized Light"><br><sub>Solarized Light</sub></td>
+</tr>
+</table>
+
+All themes: [docs/theming.md](docs/theming.md#gallery)
+
+</details>
+
 ## Features
 
 - Browse, search, and filter clipboard history
@@ -20,6 +36,7 @@ A GTK3 GUI for the [clipse](https://github.com/savedra1/clipse) clipboard manage
 - Image thumbnails and text preview with zoom
 - Keyboard navigation (`?` for shortcuts)
 - Compact mode, hover-to-select
+- Built-in color themes (Catppuccin, Nord, Gruvbox, Dracula, Tokyo Night, Rosé Pine, Solarized Light, Mono) plus custom CSS — see [Theming](docs/theming.md)
 - Multi-select mode
 - Auto-paste on Enter (optional)
 - System tray with quick-paste menu
