@@ -4,6 +4,8 @@ import logging
 
 from gi.repository import GdkPixbuf, GLib, Gtk
 
+from .. import constants
+
 log = logging.getLogger(__name__)
 
 # SVG icon data for pushpin (rotated 25 degrees to the right for a natural look)
@@ -20,8 +22,7 @@ PIN_SVG_BASE = """<?xml version="1.0" encoding="UTF-8"?>
 def create_pin_icon(is_pinned, angle=25):
     """Creates a pin icon from SVG data with color based on pinned state."""
     try:
-        # Replace currentColor with actual color
-        color = "#ffcc00" if is_pinned else "rgba(255,255,255,0.25)"
+        color = constants.ACCENT_COLOR if is_pinned else "rgba(255,255,255,0.25)"
         svg_data = PIN_SVG_BASE.replace("currentColor", color).replace(
             "{angle}", str(angle)
         )

@@ -65,7 +65,8 @@ def _create_setting_row(label_text, widget, tooltip=None):
 
 
 def show_settings_window(parent_window, close_cb, restart_app_cb=None,
-                         update_style_cb=None, style_defaults=None):
+                         update_style_cb=None, style_defaults=None,
+                         hover_cb=None):
     """Creates and shows the enhanced settings window with sections."""
     settings_window = Gtk.Window(title="Settings")
     settings_window.get_style_context().add_class("settings-window")
@@ -105,7 +106,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     compact_switch = Gtk.Switch()
     compact_switch.set_active(COMPACT_MODE)
     compact_box = _create_setting_row(
-        "Compact mode:",
+        "Compact mode (restart required):",
         compact_switch,
         "Use a more compact layout with smaller margins",
     )
@@ -123,7 +124,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     enter_paste_switch = Gtk.Switch()
     enter_paste_switch.set_active(ENTER_TO_PASTE)
     enter_paste_box = _create_setting_row(
-        "Enter to paste:",
+        "Enter to paste (restart required):",
         enter_paste_switch,
         "Press Enter to paste the selected item and close the window",
     )
@@ -132,7 +133,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     highlight_search_switch = Gtk.Switch()
     highlight_search_switch.set_active(HIGHLIGHT_SEARCH)
     highlight_search_box = _create_setting_row(
-        "Highlight search:",
+        "Highlight search (restart required):",
         highlight_search_switch,
         "Highlight matching search terms in the results list",
     )
@@ -141,7 +142,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     open_links_switch = Gtk.Switch()
     open_links_switch.set_active(OPEN_LINKS_WITH_BROWSER)
     open_links_box = _create_setting_row(
-        "Open links on Space:",
+        "Open links on Space (restart required):",
         open_links_switch,
         "Press Space on a URL item to open it in the browser (disable to show text preview)",
     )
@@ -150,7 +151,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     rich_content_switch = Gtk.Switch()
     rich_content_switch.set_active(PREVIEW_RICH_CONTENT)
     rich_content_box = _create_setting_row(
-        "Preview rich content:",
+        "Preview rich content (restart required):",
         rich_content_switch,
         "Render image URLs, SVGs, and base64 images as thumbnails in the list",
     )
@@ -159,7 +160,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     clear_search_switch = Gtk.Switch()
     clear_search_switch.set_active(CLEAR_SEARCH_ON_ESCAPE)
     clear_search_box = _create_setting_row(
-        "Clear search on Escape:",
+        "Clear search on Escape (restart required):",
         clear_search_switch,
         "When off, Escape only unfocuses the search bar and keeps the typed query "
         "so you can navigate results with j/k",
@@ -185,7 +186,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     protect_switch = Gtk.Switch()
     protect_switch.set_active(PROTECT_PINNED_ITEMS)
     protect_box = _create_setting_row(
-        "Protect pinned items:",
+        "Protect pinned items (restart required):",
         protect_switch,
         "Prevent pinned items from being deleted when clearing history",
     )
@@ -376,16 +377,15 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         constants.COMPACT_MODE = switch.get_active()
 
     def on_hover_switch_toggled(switch, state):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         if not config.config.has_section("General"):
             config.config.add_section("General")
-        config.config.set("General", "hover_to_select", str(switch.get_active()))
+        config.config.set("General", "hover_to_select", str(state))
         config._save_config()
         import clipse_gui.constants as constants
 
-        constants.HOVER_TO_SELECT = switch.get_active()
+        constants.HOVER_TO_SELECT = state
+        if hover_cb:
+            hover_cb(state)
 
     def on_enter_paste_switch_toggled(switch, state):
         nonlocal settings_changed
@@ -448,9 +448,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         constants.CLEAR_SEARCH_ON_ESCAPE = switch.get_active()
 
     def on_tray_switch_toggled(switch, state):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "minimize_to_tray", str(switch.get_active()))
@@ -466,9 +463,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
             logging.debug(f"Could not update tray manager dynamically: {e}")
 
     def on_tray_items_changed(spin):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "tray_items_count", str(int(spin.get_value())))
@@ -478,9 +472,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         constants.TRAY_ITEMS_COUNT = int(spin.get_value())
 
     def on_tray_paste_switch_toggled(switch, state):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         if not config.config.has_section("General"):
             config.config.add_section("General")
         config.config.set("General", "tray_paste_on_select", str(switch.get_active()))
@@ -491,9 +482,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
 
     # Style signal handlers
     def on_radius_changed(spin):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         value = int(spin.get_value())
         if not config.config.has_section("Style"):
             config.config.add_section("Style")
@@ -505,9 +493,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
             update_style_cb(border_radius=value)
 
     def on_transparent_changed(switch, state):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         if not config.config.has_section("Style"):
             config.config.add_section("Style")
         config.config.set("Style", "background_transparent", str(state))
@@ -518,9 +503,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
             update_style_cb(transparent=state)
 
     def on_accent_color_changed(button):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         rgba = button.get_rgba()
         color = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
         if not config.config.has_section("Style"):
@@ -533,9 +515,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
             update_style_cb(accent_color=color)
 
     def on_selection_color_changed(button):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         rgba = button.get_rgba()
         color = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
         if not config.config.has_section("Style"):
@@ -548,9 +527,6 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
             update_style_cb(selection_color=color)
 
     def on_visual_color_changed(button):
-        nonlocal settings_changed
-        settings_changed = True
-        update_button_states()
         rgba = button.get_rgba()
         color = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
         if not config.config.has_section("Style"):
@@ -633,8 +609,8 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
 
     apply_btn.connect("clicked", on_apply_clicked)
 
-    def on_close_clicked(button):
-        settings_window.destroy()
+    def close_settings(*_):
+        restart = False
         if settings_changed and restart_app_cb:
             dialog = Gtk.MessageDialog(
                 transient_for=settings_window,
@@ -643,12 +619,13 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
                 buttons=Gtk.ButtonsType.YES_NO,
                 text="Settings have been changed. Restart to apply changes?",
             )
-            response = dialog.run()
+            restart = dialog.run() == Gtk.ResponseType.YES
             dialog.destroy()
-            if response == Gtk.ResponseType.YES:
-                restart_app_cb()
+        close_cb(settings_window)
+        if restart:
+            restart_app_cb()
 
-    close_btn.connect("clicked", on_close_clicked)
+    close_btn.connect("clicked", close_settings)
 
     button_box.pack_start(apply_btn, True, True, 0)
     button_box.pack_start(close_btn, True, True, 0)
@@ -657,7 +634,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     settings_window.add(main_box)
     settings_window.connect(
         "key-press-event",
-        lambda w, e: close_cb(w) if e.keyval == Gdk.KEY_Escape else None,
+        lambda w, e: close_settings() if e.keyval == Gdk.KEY_Escape else None,
     )
     settings_window.show_all()
     close_btn.grab_focus()

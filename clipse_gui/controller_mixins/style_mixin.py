@@ -7,7 +7,6 @@ from gi.repository import Gdk, GLib, Gtk
 from ..constants import (
     DEFAULT_WINDOW_HEIGHT,
     DEFAULT_WINDOW_WIDTH,
-    HOVER_TO_SELECT,
     get_app_css,
 )
 
@@ -28,18 +27,14 @@ class StyleMixin:
             if not hasattr(self, "style_provider"):
                 log.debug("Creating and adding application CSS provider.")
                 self.style_provider = Gtk.CssProvider()
-                self.style_provider.load_from_data(
-                    self._get_current_css().encode() + b"\n" + zoom_css
-                )
                 Gtk.StyleContext.add_provider_for_screen(
                     screen,
                     self.style_provider,
                     Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
                 )
-            else:
-                self.style_provider.load_from_data(
-                    self._get_current_css().encode() + b"\n" + zoom_css
-                )
+            self.style_provider.load_from_data(
+                self._get_current_css().encode() + b"\n" + zoom_css
+            )
         except GLib.Error as e:
             log.error(f"Failed to load CSS: {e}")
         except Exception as e:
@@ -76,37 +71,12 @@ class StyleMixin:
         if transparent is not None:
             constants.BACKGROUND_TRANSPARENT = transparent
 
-        # Regenerate and apply CSS
-        if hasattr(self, "style_provider"):
-            try:
-                css = self._get_current_css()
-                screen = Gdk.Screen.get_default()
-
-                # Remove old provider
-                if screen:
-                    Gtk.StyleContext.remove_provider_for_screen(
-                        screen, self.style_provider
-                    )
-
-                # Create new provider with updated CSS
-                self.style_provider = Gtk.CssProvider()
-                self.style_provider.load_from_data(css.encode())
-
-                if screen:
-                    Gtk.StyleContext.add_provider_for_screen(
-                        screen,
-                        self.style_provider,
-                        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-                    )
-
-                log.debug("CSS reloaded successfully")
-
-                # Force window refresh
-                if self.window:
-                    self.window.queue_draw()
-                    self._invalidate_style_contexts(self.window)
-            except Exception as e:
-                log.error(f"Failed to update CSS: {e}")
+        self._apply_css()
+        if accent_color is not None:
+            self.populate_list_view()
+        if self.window:
+            self.window.queue_draw()
+            self._invalidate_style_contexts(self.window)
 
     def _invalidate_style_contexts(self, widget):
         """Recursively invalidate style contexts to force CSS reload."""
@@ -156,8 +126,7 @@ class StyleMixin:
         if not skip_populate:
             self.populate_list_view()
 
-    def update_hover_to_select(self):
+    def update_hover_to_select(self, enabled):
         """Updates hover-to-select setting and repopulates the list."""
-        self.hover_to_select = HOVER_TO_SELECT
-        # Repopulate the list to apply hover-to-select to existing rows
+        self.hover_to_select = enabled
         self.populate_list_view()
