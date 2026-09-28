@@ -5,7 +5,6 @@ import urllib.request
 import base64
 import re
 from collections import OrderedDict
-from functools import lru_cache
 from gi.repository import GdkPixbuf, GLib
 import logging
 
@@ -31,9 +30,8 @@ class ImageHandler:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    @lru_cache(maxsize=128)
     def _load_pixbuf_scaled(self, image_path, width, height):
-        """Load and scale a local file; result is lru_cache'd."""
+        """Load and scale a local file."""
         try:
             return GdkPixbuf.Pixbuf.new_from_file_at_scale(
                 image_path, width, height, True
@@ -341,7 +339,6 @@ class ImageHandler:
     def clear_cache(self):
         """Clear all cached pixbufs."""
         self.image_cache.clear()
-        self._load_pixbuf_scaled.cache_clear()
         log.info("Image cache cleared.")
 
 
