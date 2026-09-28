@@ -12,10 +12,10 @@ step with any keybinding, setting, or theme change (`docs/keybindings.md`,
 rtk proxy ruff check <files>       # or plain `ruff check`; see hook note below
 ```
 
-The `.git/hooks/pre-commit` hook runs `ruff check` on staged files and HEAD already carries
-~120 findings, so it blocks every commit that touches those files. Prove you added none
-(diff `ruff check --output-format concise` against a temp `git worktree` of HEAD), then
-commit with `--no-verify`. Do not fix unrelated lint as a side effect.
+`ruff` reads its rule set from `pyproject.toml` (`[tool.ruff.lint] select`), pinned to the
+classic defaults because newer ruff releases widened theirs. The `.git/hooks/pre-commit`
+hook runs `ruff check` on staged files and must pass; widen the rule set only together
+with the fixes it demands.
 
 Tests import `clipse_gui.constants`, which reads the developer's real
 `~/.config/clipse-gui/settings.ini` at import time. A test that depends on a default must
