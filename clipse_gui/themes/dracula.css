@@ -1,0 +1,108 @@
+/* Dracula — dark theme with vivid purple and pink */
+@define-color bg #282a36;
+@define-color bg_alt #21222c;
+@define-color surface #44475a;
+@define-color fg #f8f8f2;
+@define-color fg_dim #6272a4;
+@define-color accent #8be9fd;
+@define-color selection #bd93f9;
+@define-color pin #f1fa8c;
+@define-color visual #ff79c6;
+@define-color border #6272a4;
+@define-color error #ff5555;
+
+/* Windows: opaque theme background + explicit text color */
+.main-window, .settings-window, .preview-window, .help-window { background-color: @bg; color: @fg; }
+.main-window scrolledwindow, .main-window scrolledwindow viewport,
+.main-window list, .main-window listbox,
+.main-window list row, .main-window listbox row,
+.settings-window notebook, .settings-window notebook stack,
+.settings-window scrolledwindow, .settings-window scrolledwindow viewport,
+.settings-window box,
+.preview-window scrolledwindow, .help-window scrolledwindow,
+.help-window scrolledwindow viewport { background-color: transparent; }
+
+/* List rows */
+.main-window list row, .main-window listbox row, .main-window .list-row { color: @fg; }
+.main-window .list-row:hover { background-color: alpha(@selection, 0.07); border-left-color: alpha(@selection, 0.45); }
+.main-window .list-row:selected { background-color: alpha(@selection, 0.15); border-left-color: @selection; color: @fg; }
+.main-window list row:focus, .main-window listbox row:focus { box-shadow: inset 0 0 0 2px alpha(@selection, 0.4); }
+.main-window .list-row.selected-row { background-color: alpha(@visual, 0.15); border-left-color: @visual; }
+.main-window .list-row.selected-row:hover { background-color: alpha(@visual, 0.2); }
+.main-window .pinned-row { background-color: alpha(@pin, 0.03); border-left-color: @pin; }
+.main-window .pinned-row:hover { background-color: alpha(@pin, 0.08); border-left-color: alpha(@pin, 0.7); }
+.main-window .pinned-row:selected { background-color: alpha(@pin, 0.12); border-left-color: @pin; }
+.main-window .pinned-row.selected-row { background-color: alpha(@pin, 0.14); border-left-color: @pin; }
+.main-window .pin-icon.pinned { color: @pin; }
+.main-window .pin-icon.unpinned { color: alpha(@fg, 0.25); }
+
+/* Text roles */
+.main-window .timestamp, .main-window .empty-state { color: @fg_dim; }
+.main-window .status-label { color: @fg_dim; border-top-color: alpha(@fg, 0.1); }
+.main-window .status-label.flash { color: @fg; }
+.main-window .status-label.error { color: @error; }
+.main-window .url-link, .main-window .url-badge { color: @selection; }
+.main-window .visual-mode-indicator { background-color: @visual; color: @bg; }
+
+/* Header: pin filter toggle */
+.main-window .pin-toggle { background-color: alpha(@fg, 0.04); border-color: @border; color: @fg_dim; }
+.main-window .pin-toggle:hover { background-color: alpha(@fg, 0.09); border-color: alpha(@fg, 0.3); color: @fg; }
+.main-window .pin-toggle:checked, .main-window .pin-toggle:active { background-color: alpha(@pin, 0.18); border-color: alpha(@pin, 0.55); color: @pin; }
+.main-window .pin-toggle:checked:hover { background-color: alpha(@pin, 0.26); border-color: @pin; }
+
+/* Entries */
+.main-window entry, .settings-window entry, .preview-window entry {
+    background-color: @surface;
+    background-image: none;
+    color: @fg;
+    caret-color: @fg;
+    border-color: @border;
+}
+.main-window entry:focus, .settings-window entry:focus, .preview-window entry:focus,
+.main-window .header-search:focus, .main-window .header-search:focus-within { border-color: @selection; box-shadow: inset 0 0 0 1px alpha(@selection, 0.55); }
+.main-window entry selection, .settings-window entry selection, .preview-window entry selection { background-color: alpha(@selection, 0.35); color: @fg; }
+.settings-window spinbutton { background-color: @surface; color: @fg; border-color: @border; }
+.settings-window spinbutton entry, .settings-window spinbutton entry:focus { background-color: transparent; box-shadow: none; }
+
+/* Buttons */
+.main-window button, .settings-window button, .preview-window button, .help-window button {
+    background-color: @surface;
+    background-image: none;
+    color: @fg;
+    border-color: @border;
+    text-shadow: none;
+    -gtk-icon-shadow: none;
+}
+.main-window button:hover, .settings-window button:hover, .preview-window button:hover, .help-window button:hover { background-color: mix(@surface, @fg, 0.1); border-color: alpha(@fg, 0.3); color: @fg; }
+.main-window button:active, .settings-window button:active, .preview-window button:active, .help-window button:active,
+.main-window button:checked, .settings-window button:checked, .preview-window button:checked, .help-window button:checked { background-color: mix(@surface, @fg, 0.2); }
+.main-window button:focus, .settings-window button:focus, .preview-window button:focus, .help-window button:focus { box-shadow: 0 0 0 2px alpha(@selection, 0.5); }
+.main-window button:disabled, .settings-window button:disabled, .preview-window button:disabled, .help-window button:disabled { color: @fg_dim; background-color: alpha(@surface, 0.5); }
+.settings-window spinbutton button { background-color: transparent; }
+.settings-window spinbutton button:hover { background-color: alpha(@fg, 0.08); }
+
+/* Settings: switches, tabs, sections */
+.settings-window switch { background-color: alpha(@fg, 0.15); }
+.settings-window switch:checked { background-color: @selection; }
+.settings-window switch slider { background-color: @fg; }
+.settings-window switch:checked slider { background-color: @bg; }
+.settings-window notebook header, .settings-window notebook header.top { background-color: @bg_alt; }
+.settings-window notebook tab { background-color: transparent; color: @fg_dim; }
+.settings-window notebook tab:checked { color: @fg; box-shadow: inset 0 -2px @accent; }
+.settings-window .settings-section { border-color: @border; }
+.settings-window .settings-section > label { color: @fg; }
+.settings-window frame > border, .help-window frame > border { border-color: @border; }
+
+/* Preview */
+.preview-window textview, .preview-window textview text { background-color: @surface; color: @fg; caret-color: @fg; }
+.preview-window textview text selection { background-color: alpha(@selection, 0.35); color: @fg; }
+
+/* Help */
+.help-window frame > box { background-color: alpha(@fg, 0.03); border-color: @border; }
+.help-window frame > box > label { color: @fg; }
+.help-window .key-shortcut { background-color: @surface; color: @fg; border-color: @border; }
+
+/* Scrollbars */
+.main-window scrollbar, .settings-window scrollbar, .preview-window scrollbar, .help-window scrollbar { background-color: transparent; border-color: transparent; }
+.main-window scrollbar slider, .settings-window scrollbar slider, .preview-window scrollbar slider, .help-window scrollbar slider { background-color: alpha(@fg, 0.3); }
+.main-window scrollbar slider:hover, .settings-window scrollbar slider:hover, .preview-window scrollbar slider:hover, .help-window scrollbar slider:hover { background-color: alpha(@fg, 0.5); }
