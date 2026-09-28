@@ -70,9 +70,10 @@ class ItemOpsMixin:
                     self.flash_status("Cannot delete pinned item: protection enabled")
                     return
 
-                item_value_preview = str(
-                    self.items[original_index_to_remove].get("value", "")
-                )[:30]
+                item_value = str(item.get("value", ""))
+                item_value_preview = item_value[:30] + (
+                    "..." if len(item_value) > 30 else ""
+                )
                 log.info(f"Removing item at original index {original_index_to_remove}")
 
                 del self.items[original_index_to_remove]
@@ -92,7 +93,7 @@ class ItemOpsMixin:
                     ):
                         row.item_index -= 1
 
-                self.flash_status(f"Item removed: '{item_value_preview}...'.")
+                self.flash_status(f"Item removed: '{item_value_preview}'.")
                 self.update_status_label()
                 self._select_nearby_row(
                     removed_filtered_index
@@ -116,13 +117,7 @@ class ItemOpsMixin:
             log.warning(
                 f"Row with original index {original_index_removed} not found in list_box children."
             )
-            for idx, child in enumerate(children):  # Fallback find
-                if getattr(child, "item_index", -1) == original_index_removed:
-                    removed_filtered_index = idx
-                    row_to_remove = child
-                    break
-            if removed_filtered_index == -1:
-                return -1
+            return -1
 
         self.list_box.remove(row_to_remove)
         self.filtered_items = [
@@ -131,6 +126,23 @@ class ItemOpsMixin:
             if fi["original_index"] != original_index_removed
         ]
         return removed_filtered_index
+
+    def _confirm(self, title, message, button_label) -> bool:
+        dialog = Gtk.MessageDialog(
+            transient_for=self.window,
+            modal=True,
+            destroy_with_parent=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.NONE,
+            text=title,
+        )
+        dialog.format_secondary_text(message)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok_button = dialog.add_button(button_label, Gtk.ResponseType.OK)
+        ok_button.get_style_context().add_class("destructive-action")
+        response = dialog.run()
+        dialog.destroy()
+        return response == Gtk.ResponseType.OK
 
     def _select_nearby_row(self, index_before_removal):
         """Selects a row near the index of a previously removed row."""
@@ -186,24 +198,7 @@ class ItemOpsMixin:
         if protected_count > 0:
             message += f"\n\n({protected_count} pinned item{'s' if protected_count != 1 else ''} will be skipped due to protection)"
 
-        # Show confirmation dialog
-        dialog = Gtk.MessageDialog(
-            transient_for=self.window,
-            modal=True,
-            destroy_with_parent=True,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.NONE,
-            text="Confirm Deletion",
-        )
-        dialog.format_secondary_text(message)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        delete_button = dialog.add_button("Delete", Gtk.ResponseType.OK)
-        delete_button.get_style_context().add_class("destructive-action")
-
-        response = dialog.run()
-        dialog.destroy()
-
-        if response == Gtk.ResponseType.OK:
+        if self._confirm("Confirm Deletion", message, "Delete"):
             # Sort indices in descending order to delete from end to beginning
             indices_to_delete.sort(reverse=True)
 
@@ -211,10 +206,8 @@ class ItemOpsMixin:
                 if 0 <= idx < len(self.items):
                     del self.items[idx]
 
-            # Exit selection mode and clear selections
-            self.selection_mode = False
-            self.selected_indices.clear()
-            self.main_box.get_style_context().remove_class("selection-mode")
+            if self.selection_mode:
+                self.toggle_selection_mode()
 
             # Save and refresh
             self.schedule_save_history()
@@ -253,24 +246,7 @@ class ItemOpsMixin:
             if pinned_count > 0:
                 message += f"\n\nWarning: This includes {pinned_count} pinned item{'s' if pinned_count != 1 else ''}!"
 
-        # Show confirmation dialog
-        dialog = Gtk.MessageDialog(
-            transient_for=self.window,
-            modal=True,
-            destroy_with_parent=True,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.NONE,
-            text="Clear All Items",
-        )
-        dialog.format_secondary_text(message)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        clear_button = dialog.add_button("Clear All", Gtk.ResponseType.OK)
-        clear_button.get_style_context().add_class("destructive-action")
-
-        response = dialog.run()
-        dialog.destroy()
-
-        if response == Gtk.ResponseType.OK:
+        if self._confirm("Clear All Items", message, "Clear All"):
             if PROTECT_PINNED_ITEMS:
                 # Keep only pinned items
                 self.items = [item for item in self.items if item.get("pinned", False)]
@@ -278,11 +254,8 @@ class ItemOpsMixin:
                 # Delete everything
                 self.items = []
 
-            # Exit selection mode if active
             if self.selection_mode:
-                self.selection_mode = False
-                self.selected_indices.clear()
-                self.main_box.get_style_context().remove_class("selection-mode")
+                self.toggle_selection_mode()
 
             # Save and refresh
             self.schedule_save_history()

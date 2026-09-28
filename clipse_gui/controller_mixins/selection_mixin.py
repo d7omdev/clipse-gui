@@ -65,17 +65,14 @@ class SelectionMixin:
             # Auto-enter selection mode if not already in it
             self.toggle_selection_mode()
 
-        self.selected_indices.clear()
+        self.selected_indices = {fi["original_index"] for fi in self.filtered_items}
 
         for row in self.list_box.get_children():
             if hasattr(row, "item_index"):
-                original_index = row.item_index
-                self.selected_indices.add(original_index)
-                context = row.get_style_context()
-                context.add_class("selected-row")
+                row.get_style_context().add_class("selected-row")
 
         count = len(self.selected_indices)
-        log.info(f"Selected all {count} visible items")
+        log.info(f"Selected all {count} filtered items")
         self.flash_status(f"Selected {count} items")
         self.update_status_label()
 
