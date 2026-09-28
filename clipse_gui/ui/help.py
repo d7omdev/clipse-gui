@@ -8,6 +8,7 @@ from ..constants import DEFAULT_HELP_HEIGHT, DEFAULT_HELP_WIDTH
 def show_help_window(parent_window, close_cb):
     """Creates and shows the keyboard shortcuts help window."""
     help_window = Gtk.Window(title="Keyboard Shortcuts")
+    help_window.get_style_context().add_class("help-window")
     help_window.set_type_hint(Gdk.WindowTypeHint.DIALOG)
     help_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
     help_window.set_transient_for(parent_window)

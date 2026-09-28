@@ -4,6 +4,7 @@ import logging
 
 from gi.repository import Gdk, Gtk
 
+from .. import constants
 from ..constants import (
     ACCENT_COLOR,
     BACKGROUND_TRANSPARENT,
@@ -20,8 +21,11 @@ from ..constants import (
     SELECTION_COLOR,
     TRAY_ITEMS_COUNT,
     TRAY_PASTE_ON_SELECT,
+    USER_CSS_PATH,
+    USER_THEMES_DIR,
     VISUAL_MODE_COLOR,
     config,
+    list_themes,
 )
 
 
@@ -253,6 +257,18 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     appearance_box.set_margin_top(10)
     appearance_box.set_margin_bottom(10)
 
+    # Theme
+    theme_combo = Gtk.ComboBoxText()
+    theme_combo.append("", "None (follow GTK theme)")
+    for name in list_themes():
+        theme_combo.append(name, name.replace("-", " ").title())
+    theme_combo.set_active_id(constants.THEME)
+    theme_row = _create_setting_row(
+        "Theme:",
+        theme_combo,
+        f"Custom themes: {USER_THEMES_DIR}/<name>.css  •  Overrides: {USER_CSS_PATH}",
+    )
+
     # Border Radius
     radius_spin = Gtk.SpinButton.new_with_range(0, 20, 1)
     radius_spin.set_value(BORDER_RADIUS)
@@ -305,6 +321,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         "Color used for multi-select / visual mode highlights",
     )
 
+    appearance_box.pack_start(theme_row, False, False, 0)
     appearance_box.pack_start(radius_row, False, False, 0)
     appearance_box.pack_start(transparent_row, False, False, 0)
     appearance_box.pack_start(accent_row, False, False, 0)
@@ -481,6 +498,16 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
         constants.TRAY_PASTE_ON_SELECT = switch.get_active()
 
     # Style signal handlers
+    def on_theme_changed(combo):
+        theme_id = combo.get_active_id() or ""
+        if not config.config.has_section("Style"):
+            config.config.add_section("Style")
+        config.config.set("Style", "theme", theme_id)
+        config._save_config()
+        constants.THEME = theme_id
+        if update_style_cb:
+            update_style_cb(theme=theme_id)
+
     def on_radius_changed(spin):
         value = int(spin.get_value())
         if not config.config.has_section("Style"):
@@ -595,6 +622,7 @@ def show_settings_window(parent_window, close_cb, restart_app_cb=None,
     tray_paste_switch.connect("state-set", on_tray_paste_switch_toggled)
 
     # Style signals
+    theme_combo.connect("changed", on_theme_changed)
     radius_spin.connect("value-changed", on_radius_changed)
     transparent_switch.connect("state-set", on_transparent_changed)
     accent_button.connect("color-set", on_accent_color_changed)

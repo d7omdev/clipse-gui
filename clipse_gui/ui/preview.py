@@ -18,6 +18,7 @@ def show_preview_window(
 ):
     """Creates and shows the item preview window."""
     preview_window = Gtk.Window(title="Preview")
+    preview_window.get_style_context().add_class("preview-window")
     preview_window.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
     preview_window.set_transient_for(parent_window)
     preview_window.set_modal(True)

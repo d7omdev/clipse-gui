@@ -55,6 +55,9 @@ def parse_args_from_sys_argv():
     parser.add_argument(
         "-v", "--version", action="version", version=f"Clipse GUI v{__version__}"
     )
+    parser.add_argument(
+        "--theme", metavar="NAME", help="Override the configured theme for this run"
+    )
     return parser.parse_known_args()
 
 
@@ -94,6 +97,8 @@ def setup_logging(debug=False):
 def main():
     args, gtk_args = parse_args_from_sys_argv()
     setup_logging(debug=args.debug)
+    if args.theme is not None:
+        constants.THEME = args.theme
 
     if log is None:
         print("CRITICAL: Logging setup failed. Exiting.", file=sys.stderr)

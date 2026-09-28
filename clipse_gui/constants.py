@@ -1,6 +1,7 @@
 """Simplified constants file."""
 
 import os
+import re
 from typing import Literal
 from .config_manager import ConfigManager
 import logging
@@ -40,6 +41,7 @@ DEFAULT_SETTINGS = {
         "selection_color": "#4a90e2",
         "visual_mode_color": "#9b59b6",
         "background_transparent": "False",
+        "theme": "",
     },
     "Commands": {
         "copy_tool_cmd": "wl-copy",
@@ -112,6 +114,52 @@ VISUAL_MODE_COLOR = config.get("Style", "visual_mode_color", fallback="#9b59b6")
 BACKGROUND_TRANSPARENT = config.getboolean(
     "Style", "background_transparent", fallback=False
 )
+THEME = config.get("Style", "theme", fallback="")
+
+BUILTIN_THEMES_DIR = os.path.join(os.path.dirname(__file__), "themes")
+USER_THEMES_DIR = os.path.join(CONFIG_DIR, "themes")
+USER_CSS_PATH = os.path.join(CONFIG_DIR, "custom.css")
+
+
+def _read_text(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def list_themes() -> list[str]:
+    names = set()
+    for d in (BUILTIN_THEMES_DIR, USER_THEMES_DIR):
+        if os.path.isdir(d):
+            names.update(f[:-4] for f in os.listdir(d) if f.endswith(".css"))
+    return sorted(names)
+
+
+# Pin icons are pixbufs, so the theme's pin color is read out of the css
+THEME_PIN_COLOR = ""
+
+
+def load_theme_css(name: str) -> str:
+    global THEME_PIN_COLOR
+    css = ""
+    if name:
+        for d in (USER_THEMES_DIR, BUILTIN_THEMES_DIR):
+            path = os.path.join(d, f"{name}.css")
+            if os.path.isfile(path):
+                css = _read_text(path)
+                break
+        else:
+            log.warning(f"Theme '{name}' not found in {USER_THEMES_DIR} or {BUILTIN_THEMES_DIR}")
+    m = re.search(r"@define-color\s+pin\s+([^;]+);", css)
+    THEME_PIN_COLOR = m.group(1).strip() if m else ""
+    return css
+
+
+def load_user_css() -> str:
+    return _read_text(USER_CSS_PATH)
+
 
 COPY_TOOL_CMD = config.get("Commands", "copy_tool_cmd", fallback="wl-copy")
 X11_COPY_TOOL_CMD = config.get(

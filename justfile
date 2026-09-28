@@ -59,7 +59,7 @@ export VENV_ACTIVATE := if path_exists("venv/bin/activate") == "true" { "source 
 
 # Nuitka build options
 
-NUITKA_OPTS := "--onefile --output-dir=" + BUILD_DIR + " --remove-output --include-package=" + PACKAGE_DIR + " --follow-imports --nofollow-import-to=*.tests --assume-yes-for-downloads"
+NUITKA_OPTS := "--onefile --output-dir=" + BUILD_DIR + " --remove-output --include-package=" + PACKAGE_DIR + " --include-package-data=" + PACKAGE_DIR + " --follow-imports --nofollow-import-to=*.tests --assume-yes-for-downloads"
 
 # Current version extracted from source
 

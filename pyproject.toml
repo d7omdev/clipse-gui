@@ -42,6 +42,9 @@ version = { attr = "clipse_gui.__version__" }
 include = ["clipse_gui*"]
 exclude = ["tests*", "aur*", "docs*"]
 
+[tool.setuptools.package-data]
+clipse_gui = ["themes/*.css"]
+
 [tool.pyright]
 reportMissingModuleSource = false
 reportOptionalMemberAccess = true

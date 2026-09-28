@@ -22,7 +22,8 @@ PIN_SVG_BASE = """<?xml version="1.0" encoding="UTF-8"?>
 def create_pin_icon(is_pinned, angle=25):
     """Creates a pin icon from SVG data with color based on pinned state."""
     try:
-        color = constants.ACCENT_COLOR if is_pinned else "rgba(255,255,255,0.25)"
+        pinned_color = constants.THEME_PIN_COLOR or constants.ACCENT_COLOR
+        color = pinned_color if is_pinned else "rgba(255,255,255,0.25)"
         svg_data = PIN_SVG_BASE.replace("currentColor", color).replace(
             "{angle}", str(angle)
         )

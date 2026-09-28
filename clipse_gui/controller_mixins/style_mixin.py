@@ -8,6 +8,8 @@ from ..constants import (
     DEFAULT_WINDOW_HEIGHT,
     DEFAULT_WINDOW_WIDTH,
     get_app_css,
+    load_theme_css,
+    load_user_css,
 )
 
 log = logging.getLogger(__name__)
@@ -51,11 +53,17 @@ class StyleMixin:
             transparent=constants.BACKGROUND_TRANSPARENT,
         )
         log.debug(f"Generated CSS with border_radius={constants.BORDER_RADIUS}")
-        return css
+        glass = (
+            ".main-window, .settings-window, .preview-window, .help-window"
+            " { background-color: transparent; }"
+            if constants.BACKGROUND_TRANSPARENT
+            else ""
+        )
+        return "\n".join((css, load_theme_css(constants.THEME), glass, load_user_css()))
 
     def update_style_css(self, border_radius=None, accent_color=None,
                          selection_color=None, visual_mode_color=None,
-                         transparent=None):
+                         transparent=None, theme=None):
         """Update CSS styles on-the-fly."""
         # Update global constants
         import clipse_gui.constants as constants
@@ -70,9 +78,11 @@ class StyleMixin:
             constants.VISUAL_MODE_COLOR = visual_mode_color
         if transparent is not None:
             constants.BACKGROUND_TRANSPARENT = transparent
+        if theme is not None:
+            constants.THEME = theme
 
         self._apply_css()
-        if accent_color is not None:
+        if accent_color is not None or theme is not None:
             self.populate_list_view()
         if self.window:
             self.window.queue_draw()
