@@ -224,6 +224,11 @@ class TestFuzzySearch:
         results = fuzzy_search(items, "hello")
         assert results == []
 
+    def test_null_file_path_does_not_crash(self):
+        items = [{"value": "hello", "pinned": False, "filePath": None}]
+        results = fuzzy_search(items, "hello")
+        assert len(results) == 1
+
 
 # ---------------------------------------------------------------------------
 # _calculate_similarity

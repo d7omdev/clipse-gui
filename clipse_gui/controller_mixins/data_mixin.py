@@ -14,8 +14,13 @@ class DataMixin:
     def _on_history_updated(self, loaded_items):
         """Callback function called when the file watcher detects a change."""
         log.debug("Received history update signal from DataManager.")
+        if self.selection_mode:
+            self.toggle_selection_mode()
         self.items = loaded_items
         self.update_filtered_items()
+        tm = getattr(self.window.get_application(), "tray_manager", None)
+        if tm:
+            tm._build_fresh_menu()
 
     def _load_initial_data(self):
         """Loads history in background thread."""
@@ -46,6 +51,7 @@ class DataMixin:
         """Schedules saving the history after a debounce delay."""
         if self._save_timer_id:
             GLib.source_remove(self._save_timer_id)
+        self.data_manager.save_pending = True
         self._save_timer_id = GLib.timeout_add(
             int(SAVE_DEBOUNCE_MS or 300), self._trigger_save
         )
@@ -53,7 +59,9 @@ class DataMixin:
     def _trigger_save(self):
         """Calls the DataManager to save history."""
         log.debug("Triggering history save.")
-        self.data_manager.save_history(self.items, self._handle_save_error)
+        self._save_thread = self.data_manager.save_history(
+            self.items, self._handle_save_error
+        )
         self._save_timer_id = None
         return False
 

@@ -338,6 +338,9 @@ class ClipseGuiApplication(Gtk.Application):
             log.info("Removed pending save timer on shutdown.")
             if hasattr(self.controller, "_trigger_save"):
                 self.controller._trigger_save()
+        save_thread = getattr(self.controller, "_save_thread", None)
+        if save_thread:
+            save_thread.join(timeout=2)
 
         # Cleanup tray resources
         if self.tray_manager:

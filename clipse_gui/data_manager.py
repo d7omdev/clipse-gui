@@ -19,6 +19,8 @@ class DataManager:
         self.update_callback = update_callback
         self._last_mtime = None
         self._last_size = None
+        self.save_pending = False
+        self._reloading = False
         log.debug(f"DataManager initialized with history file: {self.file_path}")
 
     def load_history(self):
@@ -80,6 +82,7 @@ class DataManager:
             daemon=True,
         )
         thread.start()
+        return thread
 
     def _save_thread_target(self, items_to_save, callback_on_error):
         """Actual saving logic executed in a separate thread."""
@@ -117,6 +120,8 @@ class DataManager:
                         )
                 if callback_on_error:
                     GLib.idle_add(callback_on_error, f"Error saving: {e}")
+            finally:
+                self.save_pending = False
 
     def _start_history_watcher(self, callback, interval_ms=300):
         """Starts a periodic file watcher to sync clipboard history."""
@@ -134,6 +139,12 @@ class DataManager:
             )
             self._last_mtime = None
             self._last_size = None
+
+        def reload():
+            try:
+                GLib.idle_add(callback, self.load_history())
+            finally:
+                self._reloading = False
 
         def check_for_changes():
             try:
@@ -157,14 +168,14 @@ class DataManager:
                 ):
                     changed = True
 
-                if changed:
+                if changed and not self.save_pending and not self._reloading:
                     log.debug(
                         f"History file change detected ({self.file_path}). Reloading..."
                     )
                     self._last_mtime = current_mtime
                     self._last_size = current_size
-                    loaded_items = self.load_history()
-                    GLib.idle_add(callback, loaded_items)
+                    self._reloading = True
+                    threading.Thread(target=reload, daemon=True).start()
 
             except FileNotFoundError:
                 if self._last_mtime is not None or self._last_size is not None:

@@ -77,8 +77,8 @@ def fuzzy_search(
             if show_only_pinned and not is_pinned:
                 continue
 
-            item_value = item.get(value_key, "").lower()
-            file_path = item.get(path_key, "").lower()
+            item_value = (item.get(value_key) or "").lower()
+            file_path = (item.get(path_key) or "").lower()
 
             # Simple token matching
             all_tokens_match = True
