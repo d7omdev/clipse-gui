@@ -14,6 +14,7 @@ Press `?` in the app for the same reference. Keys are grouped by context — som
 | `Home` | Go to top |
 | `End` | Go to bottom of loaded items |
 | `Tab` | Toggle "Pinned Only" filter |
+| Any letter | Start searching (opens and focuses the search field) |
 
 ## Actions
 
@@ -21,9 +22,11 @@ Press `?` in the app for the same reference. Keys are grouped by context — som
 |-----|--------|
 | `Enter` | Copy selected item to clipboard |
 | `Shift+Enter` | Copy **and** paste selected item |
+| Click | Copy item and paste |
 | `Space` | Show full preview (or open URL if detected) |
 | `p` | Toggle pin status |
 | `x` / `Del` | Delete selected item |
+| `Ctrl+Shift+Del` / `Ctrl+D` | Clear all items (pinned kept only if `protect_pinned_items` is on) |
 
 If `enter_to_paste = True`, `Enter` pastes and `Shift+Enter` only copies — the mapping flips.
 
@@ -37,8 +40,7 @@ Enter with `v`. Exit with `v` or `Esc`.
 | `Space` | Toggle item selection |
 | `Ctrl+A` | Select all visible items |
 | `Ctrl+Shift+A` | Deselect all items |
-| `Ctrl+X` / `Shift+Del` | Delete all selected items |
-| `Ctrl+Shift+Del` / `Ctrl+D` | Clear all non-pinned items |
+| `x` / `Del` / `Ctrl+X` / `Shift+Del` | Delete all selected items |
 
 ## View
 
@@ -55,9 +57,11 @@ Zoom affects list text size. Preview window has its own zoom.
 | Key | Action |
 |-----|--------|
 | `Ctrl+F` | Find text in preview |
+| `Enter` / `Shift+Enter` | Next / previous find match |
 | `Ctrl+B` | Format text (pretty-print JSON) |
 | `Ctrl+C` | Copy text from preview |
-| `Esc` | Close preview |
+| `Ctrl +` / `Ctrl -` / `Ctrl 0` | Zoom preview text in / out / reset |
+| `Esc` / `Ctrl+W` | Close preview (`Esc` closes the find bar first if open) |
 
 ## General
 
@@ -81,11 +85,10 @@ This lets a single key handle "undo state" without needing to remember which con
 
 ## Search-Focused Keys
 
-When the search entry has focus, certain shortcuts are suppressed so you can type:
+When the search entry has focus, single-key shortcuts are off so you can type:
 
-- `v`, `x`, `p`, `j`, `k`, `f`, `/`, `?`, `space` → inserted as characters
 - `Up` / `Down` / `PgUp` / `PgDn` → navigate the list without losing typed query
-- `Enter` / `Tab` → blocked (prevents accidental selection while typing)
+- `Enter` / `Shift+Enter` → copy (or copy & paste) the selected row, or the first match
 - `Esc` → clear and return focus to list
 
 See `clipse_gui/controller_mixins/keyboard_mixin.py` for the full dispatch table.

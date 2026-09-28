@@ -76,17 +76,11 @@ class ClipboardHistoryController(
         self.main_box.get_style_context().add_class("main-window")
         self.search_entry = ui_elements["search_entry"]
         self.pin_filter_button = ui_elements["pin_filter_button"]
-        self.compact_mode_button = ui_elements["compact_mode_button"]
         self.scrolled_window = ui_elements["scrolled_window"]
         self.list_box = ui_elements["list_box"]
         self.status_label = ui_elements["status_label"]
         self.selection_mode_banner = ui_elements["selection_mode_banner"]
         self.vadj = self.scrolled_window.get_vadjustment()
-
-        # Hint overlay removed - not needed
-
-        # Set initial compact mode button state
-        self.compact_mode_button.set_active(self.compact_mode)
 
         # Hide search entry if in compact mode after window is realized
         if self.compact_mode:
@@ -116,8 +110,7 @@ class ClipboardHistoryController(
         self.search_entry.connect("search-changed", self.on_search_changed)
         self.search_entry.connect("focus-out-event", self.on_search_focus_out)
         self.pin_filter_button.connect("toggled", self.on_pin_filter_toggled)
-        self.compact_mode_button.connect("toggled", self.on_compact_mode_toggled)
-        self.list_box.connect("row-activated", self.on_row_activated)
+        self.list_box.connect("row-activated", self._on_row_activated_signal)
         self.list_box.connect("size-allocate", self.on_list_box_size_allocate)
 
         if self.vadj:

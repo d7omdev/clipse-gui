@@ -67,6 +67,7 @@ class FakeController(KeyboardMixin):
         self.update_zoom = MagicMock()
         self.update_compact_mode = MagicMock()
         self.update_style_css = MagicMock()
+        self.update_hover_to_select = MagicMock()
         self.on_help_window_close = MagicMock()
         self.on_settings_window_close = MagicMock()
         self.restart_application = MagicMock()

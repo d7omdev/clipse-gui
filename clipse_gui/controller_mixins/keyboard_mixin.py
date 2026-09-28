@@ -6,26 +6,13 @@ from gi.repository import Gdk, GLib, Gtk
 
 from ..constants import (
     CLEAR_SEARCH_ON_ESCAPE,
+    DEFAULT_SETTINGS,
     ENTER_TO_PASTE,
     OPEN_LINKS_WITH_BROWSER,
-    config,
 )
 from ..ui_components import show_help_window, show_settings_window
 
 log = logging.getLogger(__name__)
-
-# Keys that insert their character when search entry is focused
-_SEARCH_INSERT_KEYS = {
-    Gdk.KEY_v: "v",
-    Gdk.KEY_x: "x",
-    Gdk.KEY_p: "p",
-    Gdk.KEY_j: "j",
-    Gdk.KEY_k: "k",
-    Gdk.KEY_f: "f",
-    Gdk.KEY_slash: "/",
-    Gdk.KEY_question: "?",
-    Gdk.KEY_space: " ",
-}
 
 _PAGE_STEP = 5
 
@@ -38,13 +25,13 @@ class KeyboardMixin:
         shift = bool(event.state & Gdk.ModifierType.SHIFT_MASK)
 
         if self.search_entry.has_focus():
-            return self._handle_search_keys(keyval)
+            return self._handle_search_keys(keyval, shift)
 
         return self._dispatch_key(keyval, ctrl, shift)
 
     # ── Search-focused key handling ─────────────────────────────
 
-    def _handle_search_keys(self, keyval):
+    def _handle_search_keys(self, keyval, shift):
         """Handle keys when search entry is focused."""
         if keyval == Gdk.KEY_Escape:
             return self._handle_search_escape()
@@ -52,12 +39,8 @@ class KeyboardMixin:
         if keyval in (Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down):
             return self._navigate_from_search(keyval)
 
-        char = _SEARCH_INSERT_KEYS.get(keyval)
-        if char:
-            self._insert_search_char(char)
-            return True
-
-        if keyval in (Gdk.KEY_Tab, Gdk.KEY_Return):
+        if keyval == Gdk.KEY_Return:
+            self._handle_return(not ENTER_TO_PASTE if shift else False)
             return True
 
         return False
@@ -115,16 +98,6 @@ class KeyboardMixin:
 
         return False
 
-    def _insert_search_char(self, char):
-        """Insert a character into the search entry at the cursor."""
-        text = self.search_entry.get_text()
-        if hasattr(self.search_entry, "get_position"):
-            pos = self.search_entry.get_position()
-            self.search_entry.set_text(text[:pos] + char + text[pos:])
-            self.search_entry.set_position(pos + 1)
-        else:
-            self.search_entry.set_text(text + char)
-
     # ── Main key dispatch ───────────────────────────────────────
 
     def _dispatch_key(self, keyval, ctrl, shift):
@@ -160,7 +133,7 @@ class KeyboardMixin:
             (False, True, Gdk.KEY_slash): self._show_help,
             (True, False, Gdk.KEY_comma): self._show_settings,
             # Tab / Escape / Quit
-            (False, False, Gdk.KEY_Tab): self._handle_tab,
+            (False, False, Gdk.KEY_Tab): self._toggle_pin_filter,
             (False, False, Gdk.KEY_Escape): self._handle_escape,
             (True, False, Gdk.KEY_q): self._handle_quit,
             # Zoom
@@ -174,6 +147,15 @@ class KeyboardMixin:
         if handler:
             result = handler()
             return result if result is not None else True
+
+        char = chr(Gdk.keyval_to_unicode(keyval) or 0)
+        if not ctrl and char.isprintable() and not char.isspace():
+            self.search_entry.set_no_show_all(False)
+            self.search_entry.show()
+            self.search_entry.grab_focus()
+            self.search_entry.set_text(char)
+            self.search_entry.set_position(-1)
+            return True
         return False
 
     # ── Handler methods ─────────────────────────────────────────
@@ -188,13 +170,13 @@ class KeyboardMixin:
         """Enter: activate selected row, or select first, or focus search."""
         selected = self.list_box.get_selected_row()
         if selected:
-            self.on_row_activated(self.list_box, with_paste)
+            self.on_row_activated(selected, with_paste)
         elif self.list_box.get_children():
             first = self.list_box.get_row_at_index(0)
             if first:
                 self.list_box.select_row(first)
                 first.grab_focus()
-                self.on_row_activated(self.list_box)
+                self.on_row_activated(first, with_paste)
         else:
             self.search_entry.grab_focus()
 
@@ -235,8 +217,10 @@ class KeyboardMixin:
         return False
 
     def _handle_remove_item(self):
-        """x / Delete: remove single item (only outside selection mode)."""
-        if self.list_box.get_selected_row() and not self.selection_mode:
+        """x / Delete: remove single item, or the selection in selection mode."""
+        if self.selection_mode:
+            return self._handle_delete_selected()
+        if self.list_box.get_selected_row():
             self.remove_selected_item()
             return True
         return False
@@ -255,12 +239,13 @@ class KeyboardMixin:
         show_help_window(self.window, self.on_help_window_close)
 
     def _show_settings(self):
+        style = DEFAULT_SETTINGS["Style"]
         style_defaults = {
-            "border_radius": 6,
-            "accent_color": "#ffcc00",
-            "selection_color": "#4a90e2",
-            "visual_mode_color": "#9b59b6",
-            "background_transparent": False,
+            "border_radius": int(style["border_radius"]),
+            "accent_color": style["accent_color"],
+            "selection_color": style["selection_color"],
+            "visual_mode_color": style["visual_mode_color"],
+            "background_transparent": style["background_transparent"] == "True",
         }
         show_settings_window(
             self.window,
@@ -268,9 +253,10 @@ class KeyboardMixin:
             self.restart_application,
             update_style_cb=self.update_style_css,
             style_defaults=style_defaults,
+            hover_cb=self.update_hover_to_select,
         )
 
-    def _handle_tab(self):
+    def _toggle_pin_filter(self):
         self.pin_filter_button.set_active(not self.pin_filter_button.get_active())
         self.list_box.grab_focus()
 
@@ -321,23 +307,15 @@ class KeyboardMixin:
     # ── Public callbacks ────────────────────────────────────────
 
     def on_row_activated(self, row, with_paste_simulation=False):
-        """Handles double-click or Enter on a list row."""
+        """Handles Enter on a list row."""
         log.debug(f"Row activated: original_index={getattr(row, 'item_index', 'N/A')}")
         self.copy_selected_item_to_clipboard(with_paste_simulation)
 
+    def _on_row_activated_signal(self, listbox, row):
+        """ListBox row-activated (double-click): copy and paste."""
+        self.on_row_activated(row, True)
+
     def _on_row_single_click(self, row):
-        """Handles single-click on a list row - copies and pastes."""
-        log.debug(
-            f"Row single-clicked: original_index={getattr(row, 'item_index', 'N/A')}"
-        )
+        """Single-click on a row: copy and paste."""
         self.list_box.select_row(row)
         self.copy_selected_item_to_clipboard(with_paste_simulation=True)
-
-    def on_compact_mode_toggled(self, button):
-        """Handles compact mode toggle button state changes."""
-        self.compact_mode = button.get_active()
-        self.update_compact_mode()
-        if not config.config.has_section("General"):
-            config.config.add_section("General")
-        config.config.set("General", "compact_mode", str(self.compact_mode))
-        config._save_config()

@@ -48,14 +48,21 @@ def show_help_window(parent_window, close_cb):
         ("Home", "Go to top", False),
         ("End", "Go to bottom (of loaded items)", False),
         ("Tab", "Toggle 'Pinned Only' filter", False),
+        ("Any letter", "Start searching", False),
         ("", None, False),  # Spacer
         # Actions
         ("ACTIONS", None, True),
         ("Enter", "Copy selected item to clipboard", False),
         ("Shift+Enter", "Copy & paste selected item", False),
+        ("Click", "Copy item and paste", False),
         ("Space", "Show full preview", False),
         ("p", "Toggle pin status", False),
         ("x / Del", "Delete selected item", False),
+        (
+            "Ctrl+Shift+Del / Ctrl+D",
+            "Clear all items (pinned kept only if protection is on)",
+            False,
+        ),
         ("", None, False),  # Spacer
         # Multi-Select Mode
         ("MULTI-SELECT MODE", None, True),
@@ -63,8 +70,7 @@ def show_help_window(parent_window, close_cb):
         ("Space", "Toggle item selection (in selection mode)", False),
         ("Ctrl+A", "Select all visible items", False),
         ("Ctrl+Shift+A", "Deselect all items", False),
-        ("Ctrl+X / Shift+Del", "Delete selected items", False),
-        ("Ctrl+Shift+Del / Ctrl+D", "Clear all non-pinned items", False),
+        ("x / Del / Ctrl+X / Shift+Del", "Delete selected items", False),
         ("", None, False),  # Spacer
         # View
         ("VIEW", None, True),
@@ -75,8 +81,11 @@ def show_help_window(parent_window, close_cb):
         # Preview Window
         ("PREVIEW WINDOW", None, True),
         ("Ctrl+F", "Find text in preview", False),
+        ("Enter / Shift+Enter", "Next / previous find match", False),
         ("Ctrl+B", "Format text (pretty-print JSON)", False),
         ("Ctrl+C", "Copy text from preview", False),
+        ("Ctrl + / - / 0", "Zoom preview text in / out / reset", False),
+        ("Esc / Ctrl+W", "Close preview (Esc closes find bar first)", False),
         ("", None, False),  # Spacer
         # General
         ("GENERAL", None, True),

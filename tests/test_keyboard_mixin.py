@@ -52,11 +52,22 @@ class TestDispatchRouting:
         ctrl.remove_selected_item.assert_called_once()
         assert result is True
 
-    def test_x_noop_in_selection_mode(self, ctrl):
+    def test_x_deletes_selection_in_selection_mode(self, ctrl):
         ctrl.list_box.get_selected_row.return_value = MagicMock()
         ctrl.selection_mode = True
-        ctrl.on_key_press(None, make_event(Gdk.KEY_x))
+        ctrl.selected_indices = {0}
+        result = ctrl.on_key_press(None, make_event(Gdk.KEY_x))
         ctrl.remove_selected_item.assert_not_called()
+        ctrl.delete_selected_items.assert_called_once()
+        assert result is True
+
+    def test_x_noop_in_selection_mode_without_selection(self, ctrl):
+        ctrl.list_box.get_selected_row.return_value = MagicMock()
+        ctrl.selection_mode = True
+        result = ctrl.on_key_press(None, make_event(Gdk.KEY_x))
+        ctrl.remove_selected_item.assert_not_called()
+        ctrl.delete_selected_items.assert_not_called()
+        assert result is False
 
     def test_delete_removes_item_when_selected(self, ctrl):
         ctrl.list_box.get_selected_row.return_value = MagicMock()
@@ -108,7 +119,7 @@ class TestDispatchRouting:
         ctrl.toggle_pin_selected.assert_not_called()
         assert result is False
 
-    # ── Tab ───────────────────────────────────────────────────
+    # ── Pin filter ────────────────────────────────────────────
 
     def test_tab_toggles_pin_filter(self, ctrl):
         ctrl.pin_filter_button.get_active.return_value = True
@@ -173,9 +184,28 @@ class TestDispatchRouting:
 
     # ── Unbound key → False ───────────────────────────────────
 
-    def test_unbound_key_returns_false(self, ctrl):
-        result = ctrl.on_key_press(None, make_event(Gdk.KEY_z))
+    def test_unbound_non_printable_key_returns_false(self, ctrl):
+        result = ctrl.on_key_press(None, make_event(Gdk.KEY_F5))
         assert result is False
+
+    def test_ctrl_unbound_letter_returns_false(self, ctrl):
+        result = ctrl.on_key_press(None, make_event(Gdk.KEY_z, ctrl=True))
+        ctrl.search_entry.set_text.assert_not_called()
+        assert result is False
+
+    # ── Type-to-search ────────────────────────────────────────
+
+    @pytest.mark.parametrize(
+        "keyval,shift,char",
+        [(Gdk.KEY_z, False, "z"), (Gdk.KEY_Z, True, "Z"), (Gdk.KEY_1, False, "1")],
+    )
+    def test_printable_key_starts_search(self, keyval, shift, char, ctrl):
+        result = ctrl.on_key_press(None, make_event(keyval, shift=shift))
+        ctrl.search_entry.show.assert_called_once()
+        ctrl.search_entry.grab_focus.assert_called_once()
+        ctrl.search_entry.set_text.assert_called_once_with(char)
+        ctrl.search_entry.set_position.assert_called_once_with(-1)
+        assert result is True
 
 
 # ════════════════════════════════════════════════════════════════
@@ -190,45 +220,54 @@ class TestSearchFocused:
     def _focus_search(self, ctrl):
         ctrl.search_entry.has_focus.return_value = True
 
-    # ── Character insertion ───────────────────────────────────
+    # ── Bound keys pass through so GTK inserts them ───────────
 
     @pytest.mark.parametrize(
-        "keyval,expected_char",
+        "keyval",
         [
-            (Gdk.KEY_v, "v"),
-            (Gdk.KEY_x, "x"),
-            (Gdk.KEY_p, "p"),
-            (Gdk.KEY_j, "j"),
-            (Gdk.KEY_k, "k"),
-            (Gdk.KEY_f, "f"),
-            (Gdk.KEY_slash, "/"),
-            (Gdk.KEY_question, "?"),
-            (Gdk.KEY_space, " "),
+            Gdk.KEY_v,
+            Gdk.KEY_x,
+            Gdk.KEY_p,
+            Gdk.KEY_j,
+            Gdk.KEY_k,
+            Gdk.KEY_f,
+            Gdk.KEY_slash,
+            Gdk.KEY_question,
+            Gdk.KEY_space,
+            Gdk.KEY_Tab,
         ],
     )
-    def test_bound_keys_insert_char(self, keyval, expected_char, ctrl):
-        ctrl.search_entry.get_text.return_value = "abc"
-        ctrl.search_entry.get_position.return_value = 2
+    def test_bound_keys_pass_through(self, keyval, ctrl):
         result = ctrl.on_key_press(None, make_event(keyval))
-        ctrl.search_entry.set_text.assert_called_once_with(f"ab{expected_char}c")
-        ctrl.search_entry.set_position.assert_called_once_with(3)
-        assert result is True
+        ctrl.search_entry.set_text.assert_not_called()
+        ctrl.toggle_selection_mode.assert_not_called()
+        ctrl.pin_filter_button.set_active.assert_not_called()
+        assert result is False
 
-    def test_char_appended_when_no_get_position(self, ctrl):
-        ctrl.search_entry.get_text.return_value = "ab"
-        del ctrl.search_entry.get_position  # remove the attribute
-        result = ctrl.on_key_press(None, make_event(Gdk.KEY_v))
-        ctrl.search_entry.set_text.assert_called_once_with("abv")
-        assert result is True
+    # ── Enter ─────────────────────────────────────────────────
 
-    # ── Blocked keys ──────────────────────────────────────────
-
-    def test_tab_blocked(self, ctrl):
-        result = ctrl.on_key_press(None, make_event(Gdk.KEY_Tab))
-        assert result is True
-
-    def test_return_blocked(self, ctrl):
+    def test_return_copies_selected_row(self, ctrl):
+        ctrl.list_box.get_selected_row.return_value = MagicMock()
         result = ctrl.on_key_press(None, make_event(Gdk.KEY_Return))
+        ctrl.copy_selected_item_to_clipboard.assert_called_once_with(False)
+        assert result is True
+
+    def test_return_selects_and_copies_first_row_when_none_selected(self, ctrl):
+        first = MagicMock()
+        ctrl.list_box.get_children.return_value = [first]
+        ctrl.list_box.get_row_at_index.return_value = first
+        result = ctrl.on_key_press(None, make_event(Gdk.KEY_Return))
+        ctrl.list_box.select_row.assert_called_once_with(first)
+        ctrl.copy_selected_item_to_clipboard.assert_called_once_with(False)
+        assert result is True
+
+    @patch(
+        "clipse_gui.controller_mixins.keyboard_mixin.ENTER_TO_PASTE", new=False
+    )
+    def test_shift_return_pastes(self, ctrl):
+        ctrl.list_box.get_selected_row.return_value = MagicMock()
+        result = ctrl.on_key_press(None, make_event(Gdk.KEY_Return, shift=True))
+        ctrl.copy_selected_item_to_clipboard.assert_called_once_with(True)
         assert result is True
 
     # ── Passthrough ───────────────────────────────────────────
@@ -245,6 +284,9 @@ class TestSearchFocused:
         ctrl.toggle_selection_mode.assert_called_once()
         assert result is True
 
+    @patch(
+        "clipse_gui.controller_mixins.keyboard_mixin.CLEAR_SEARCH_ON_ESCAPE", new=True
+    )
     @patch("clipse_gui.controller_mixins.keyboard_mixin.GLib")
     def test_escape_clears_text_and_unfocuses(self, mock_glib, ctrl):
         ctrl.search_entry.get_text.return_value = "query"
@@ -371,14 +413,18 @@ class TestReturnKey:
         # not ENTER_TO_PASTE → False
         ctrl.copy_selected_item_to_clipboard.assert_called_once_with(False)
 
-    def test_return_selects_first_row_when_none_selected(self, ctrl):
+    @patch(
+        "clipse_gui.controller_mixins.keyboard_mixin.ENTER_TO_PASTE", new=False
+    )
+    def test_shift_return_selects_first_row_and_pastes(self, ctrl):
         first = MagicMock()
         ctrl.list_box.get_selected_row.return_value = None
         ctrl.list_box.get_children.return_value = [first]
         ctrl.list_box.get_row_at_index.return_value = first
-        ctrl.on_key_press(None, make_event(Gdk.KEY_Return))
+        ctrl.on_key_press(None, make_event(Gdk.KEY_Return, shift=True))
         ctrl.list_box.select_row.assert_called_once_with(first)
         first.grab_focus.assert_called_once()
+        ctrl.copy_selected_item_to_clipboard.assert_called_once_with(True)
 
     def test_return_focuses_search_when_list_empty(self, ctrl):
         ctrl.list_box.get_selected_row.return_value = None
@@ -436,6 +482,9 @@ class TestEscapeKey:
         ctrl.toggle_selection_mode.assert_called_once()
         assert result is True
 
+    @patch(
+        "clipse_gui.controller_mixins.keyboard_mixin.CLEAR_SEARCH_ON_ESCAPE", new=True
+    )
     def test_escape_clears_search_text_second(self, ctrl):
         ctrl.search_entry.get_text.return_value = "query"
         result = ctrl.on_key_press(None, make_event(Gdk.KEY_Escape))
@@ -493,7 +542,15 @@ class TestFocusSearch:
 
 class TestPublicCallbacks:
 
-    def test_on_row_single_click_selects_and_copies(self, ctrl):
+    def test_on_row_activated_copies_without_paste_by_default(self, ctrl):
+        ctrl.on_row_activated(MagicMock())
+        ctrl.copy_selected_item_to_clipboard.assert_called_once_with(False)
+
+    def test_row_activated_signal_always_pastes(self, ctrl):
+        ctrl._on_row_activated_signal(ctrl.list_box, MagicMock())
+        ctrl.copy_selected_item_to_clipboard.assert_called_once_with(True)
+
+    def test_single_click_selects_and_pastes(self, ctrl):
         row = MagicMock()
         ctrl._on_row_single_click(row)
         ctrl.list_box.select_row.assert_called_once_with(row)

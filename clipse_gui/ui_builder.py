@@ -17,7 +17,6 @@ def build_main_window_content() -> dict:
              "main_box": Gtk.Box (the top-level container),
              "search_entry": Gtk.SearchEntry,
              "pin_filter_button": Gtk.ToggleButton,
-             "compact_mode_button": Gtk.ToggleButton,
              "scrolled_window": Gtk.ScrolledWindow,
              "list_box": Gtk.ListBox,
              "status_label": Gtk.Label
@@ -58,8 +57,6 @@ def build_main_window_content() -> dict:
     if not COMPACT_MODE:
         header_box.pack_start(pin_filter_button, False, False, 0)
 
-    compact_mode_button = Gtk.ToggleButton(label="Compact")
-    # header_box.pack_start(compact_mode_button, False, False, 0)
     main_box.pack_start(header_box, False, False, 1 if COMPACT_MODE else 3)
 
     # --- List View ---
@@ -73,6 +70,7 @@ def build_main_window_content() -> dict:
 
     list_box = Gtk.ListBox()
     list_box.set_selection_mode(Gtk.SelectionMode.SINGLE)
+    list_box.set_activate_on_single_click(False)
     viewport.add(list_box)
 
     # --- Status Bar ---
@@ -104,7 +102,6 @@ def build_main_window_content() -> dict:
         "header_box": header_box,
         "search_entry": search_entry,
         "pin_filter_button": pin_filter_button,
-        "compact_mode_button": compact_mode_button,
         "scrolled_window": scrolled_window,
         "list_box": list_box,
         "status_label": status_label,
