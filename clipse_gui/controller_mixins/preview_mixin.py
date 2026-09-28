@@ -2,7 +2,7 @@
 
 import logging
 
-from gi.repository import Gdk, Gtk, Pango
+from gi.repository import Gdk, GLib, Gtk, Pango
 
 from ..ui_components import show_preview_window
 
@@ -117,6 +117,11 @@ class PreviewMixin:
         """Handles key presses within the preview window."""
         keyval = event.keyval
         ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
+        search_bar = getattr(preview_window, "search_bar", None)
+
+        if keyval == Gdk.KEY_Escape and search_bar and search_bar.get_search_mode():
+            search_bar.set_search_mode(False)
+            return True
 
         if keyval == Gdk.KEY_Escape or (ctrl and keyval == Gdk.KEY_w):
             preview_window.destroy()
@@ -217,20 +222,27 @@ class PreviewMixin:
                 # Format text with Ctrl+B
                 from ..ui_components import _format_text_content
 
+                buffer = textview.get_buffer()
+                before = buffer.get_text(*buffer.get_bounds(), False)
                 _format_text_content(textview)
+                changed = buffer.get_text(*buffer.get_bounds(), False) != before
+                self._flash_preview_status(
+                    preview_window,
+                    "Text formatted" if changed else "No formatting applied",
+                )
                 return True
             if ctrl and keyval == Gdk.KEY_c:
                 buffer = textview.get_buffer()
                 clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
                 if buffer.get_has_selection():
                     buffer.copy_clipboard(clipboard)
-                    self.flash_status("Selection copied from preview", duration=1500)
+                    self._flash_preview_status(preview_window, "Selection copied")
                 else:
                     start, end = buffer.get_bounds()
                     buffer.select_range(start, end)
                     buffer.copy_clipboard(clipboard)
                     buffer.delete_selection(False, False)
-                    self.flash_status("All text copied from preview", duration=1500)
+                    self._flash_preview_status(preview_window, "All text copied")
                 return True
             if ctrl and keyval in [Gdk.KEY_plus, Gdk.KEY_equal]:
                 self.change_preview_text_size(textview, 1.0)
@@ -242,3 +254,9 @@ class PreviewMixin:
                 self.reset_preview_text_size(textview)
                 return True
         return False
+
+    def _flash_preview_status(self, preview_window, text):
+        label = getattr(preview_window, "status_label", None)
+        if label:
+            label.set_text(text)
+            GLib.timeout_add(2500, lambda: label.set_text("") or False)

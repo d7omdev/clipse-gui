@@ -30,7 +30,29 @@ def show_preview_window(
         image_path = item.get("filePath")
         if image_path and os.path.exists(image_path):
             try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file(image_path)
+                display = parent_window.get_display()
+                # Get GDK window from GTK window
+                gdk_window = parent_window.get_window()
+                monitor = (
+                    display.get_monitor_at_window(gdk_window) if gdk_window else None
+                )
+
+                if monitor:
+                    geometry = monitor.get_geometry()
+                    max_w = int(geometry.width * 0.8)
+                    max_h = int(geometry.height * 0.8)
+                else:
+                    max_w = 1200
+                    max_h = 800
+
+                # new_from_file_at_scale also upscales, so only use it for large files
+                _, img_w, img_h = GdkPixbuf.Pixbuf.get_file_info(image_path)
+                if img_w > max_w or img_h > max_h:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        image_path, max_w, max_h, True
+                    )
+                else:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file(image_path)
                 if pixbuf is None:
                     raise GLib.Error(
                         GLib.ErrorDomain.G_FILE,
@@ -41,37 +63,7 @@ def show_preview_window(
                 image.set_halign(Gtk.Align.CENTER)
                 image.set_valign(Gtk.Align.CENTER)
 
-                display = parent_window.get_display()
-                # Get GDK window from GTK window
-                gdk_window = parent_window.get_window()
-                monitor = (
-                    display.get_monitor_at_window(gdk_window) if gdk_window else None
-                )
-
-                if monitor:
-                    geometry = monitor.get_geometry()
-                    max_w = geometry.width * 0.8
-                    max_h = geometry.height * 0.8
-                else:
-                    max_w = 1200
-                    max_h = 800
-
-                img_w = pixbuf.get_width()
-                img_h = pixbuf.get_height()
-                # Calculate scaling while maintaining aspect ratio
-                if img_w > max_w or img_h > max_h:
-                    scale = min(max_w / img_w, max_h / img_h)
-                    w = int(img_w * scale)
-                    h = int(img_h * scale)
-                else:
-                    w = img_w
-                    h = img_h
-
-                # Create scaled pixbuf
-                scaled_pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
-                image.set_from_pixbuf(scaled_pixbuf)
-
-                preview_window.set_default_size(w, h)
+                preview_window.set_default_size(pixbuf.get_width(), pixbuf.get_height())
                 scrolled = Gtk.ScrolledWindow()
                 scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
                 scrolled.add(image)
@@ -119,7 +111,6 @@ def show_preview_window(
         vbox.pack_start(scrolled_window, True, True, 0)
 
         action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        action_box.set_halign(Gtk.Align.CENTER)
 
         # Format button
         format_btn = Gtk.Button()
@@ -188,6 +179,14 @@ def show_preview_window(
 
         search_bar.add(search_container)
         search_bar.connect_entry(search_entry)
+        preview_window.search_bar = search_bar
+
+        def clear_highlights_when_closed(bar, _pspec):
+            if not bar.get_search_mode():
+                buffer = preview_text_view.get_buffer()
+                buffer.remove_all_tags(*buffer.get_bounds())
+
+        search_bar.connect("notify::search-mode-enabled", clear_highlights_when_closed)
 
         # Insert search bar after scrolled window
         vbox.pack_start(search_bar, False, False, 0)
@@ -225,6 +224,15 @@ def show_preview_window(
         )
         zoom_reset.connect("clicked", lambda b: reset_text_size_cb(preview_text_view))
 
+        status_label = Gtk.Label()
+        status_label.set_hexpand(True)
+        status_label.set_xalign(0)
+        preview_window.status_label = status_label
+
+        close_window_btn = Gtk.Button(label="Close")
+        close_window_btn.set_tooltip_text("Close preview (Esc / Ctrl+W)")
+        close_window_btn.connect("clicked", lambda b: preview_window.destroy())
+
         action_box.pack_start(format_btn, False, False, 0)
         action_box.pack_start(find_btn, False, False, 0)
         action_box.pack_start(
@@ -234,6 +242,8 @@ def show_preview_window(
         action_box.pack_start(zoom_out, False, False, 0)
         action_box.pack_start(zoom_reset, False, False, 0)
         action_box.pack_start(zoom_in, False, False, 0)
+        action_box.pack_start(status_label, True, True, 10)
+        action_box.pack_end(close_window_btn, False, False, 0)
         vbox.pack_end(action_box, False, False, 5)
 
         preview_window.set_default_size(
@@ -255,11 +265,7 @@ def _toggle_search_bar(
 ):
     """Toggles the enhanced search bar visibility and handles search functionality."""
     if search_bar.get_search_mode():
-        # Hide search bar and clear highlights
         search_bar.set_search_mode(False)
-        buffer = text_view.get_buffer()
-        start, end = buffer.get_bounds()
-        buffer.remove_all_tags(start, end)
     else:
         # Show search bar and focus entry
         search_bar.set_search_mode(True)
@@ -412,9 +418,6 @@ def _toggle_search_bar(
             def close_search():
                 """Close the search bar."""
                 search_bar.set_search_mode(False)
-                buffer = text_view.get_buffer()
-                start, end = buffer.get_bounds()
-                buffer.remove_all_tags(start, end)
 
             # Store functions on search_entry for access from button callbacks
             search_entry._find_next = find_next
