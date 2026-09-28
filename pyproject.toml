@@ -45,6 +45,10 @@ exclude = ["tests*", "aur*", "docs*"]
 [tool.setuptools.package-data]
 clipse_gui = ["themes/*.css"]
 
+# Pin the rule set: ruff 0.16 widened its defaults and turned CI red without a code change
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
 [tool.pyright]
 reportMissingModuleSource = false
 reportOptionalMemberAccess = true
