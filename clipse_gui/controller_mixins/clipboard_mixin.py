@@ -10,7 +10,6 @@ from gi.repository import GLib
 
 from ..constants import (
     COPY_TOOL_CMD,
-    ENTER_TO_PASTE,
     PASTE_SIMULATION_CMD_WAYLAND,
     PASTE_SIMULATION_CMD_X11,
     PASTE_SIMULATION_DELAY_MS,
@@ -46,7 +45,6 @@ class ClipboardMixin:
             except subprocess.TimeoutExpired:
                 log.error(f"Paste command timed out: {cmd_args}")
                 process.kill()
-                stdout_output, stderr_output = process.communicate()
                 self.flash_status("Error: Paste command timed out")
                 return False
             except OSError as e:
@@ -266,7 +264,7 @@ class ClipboardMixin:
                     self.flash_status("Cannot copy null text value.")
 
             if copy_successful:
-                if ENTER_TO_PASTE or with_paste_simulation:
+                if with_paste_simulation:
                     log.debug("Hiding window and scheduling paste simulation.")
                     self.window.hide()
                     GLib.timeout_add(
@@ -287,20 +285,16 @@ class ClipboardMixin:
     def _trigger_paste_simulation_and_quit(self):
         """Called after a delay to run paste simulation and then quit."""
         log.debug("Attempting paste simulation...")
-        paste_success = self.paste_from_clipboard_simulated()
-        if paste_success:
-            log.info("Paste simulation command successful.")
-        else:
-            log.warning("Paste simulation command failed or skipped.")
-            # Optional: Show the window again if paste fails?
-            # self.window.show()
-            # self.flash_status("Paste failed. Check logs/dependencies (xdotool/wtype).")
+        paste_error = self.paste_from_clipboard_simulated()
+        if paste_error:
+            self.window.show()
+            self.window.present()
+            self.flash_status(f"Error: {paste_error}")
+            return False
 
-        # Quit the application after a longer delay to ensure paste completes
         # Some applications need more time to receive and process the paste
-        quit_delay = 200  # ms - increased from 50ms for better reliability
-        GLib.timeout_add(quit_delay, self._quit_application)
-        return False  # Prevent timer from repeating
+        GLib.timeout_add(200, self._quit_application)
+        return False
 
     def _quit_application(self):
         """Safely quits the GTK application."""
@@ -311,7 +305,9 @@ class ClipboardMixin:
         return False  # Prevent timer from repeating
 
     def paste_from_clipboard_simulated(self):
-        """Pastes FROM the clipboard by simulating key presses (Ctrl+V)."""
+        """Pastes FROM the clipboard by simulating key presses (Ctrl+V).
+
+        Returns None on success, otherwise a human-readable error message."""
         if self._is_wayland:
             cmd_str = str(PASTE_SIMULATION_CMD_WAYLAND)
             tool_name = "wtype"
@@ -320,18 +316,16 @@ class ClipboardMixin:
             tool_name = "xdotool"
 
         if not cmd_str:
-            log.error(
-                f"Paste simulation command not configured for {'Wayland' if self._is_wayland else 'X11'}."
-            )
-            self.flash_status("Error: Paste simulation command not configured.")
-            return False
+            error_msg = f"Paste simulation command not configured for {'Wayland' if self._is_wayland else 'X11'}."
+            log.error(error_msg)
+            return error_msg
 
         try:
             cmd_args = shlex.split(cmd_str)
         except Exception as e:
-            log.error(f"Could not parse paste simulation command ('{cmd_str}'): {e}")
-            self.flash_status(f"Error: Invalid Paste command: {cmd_str[:50]}...")
-            return False
+            error_msg = f"Invalid paste simulation command ('{cmd_str[:50]}'): {e}"
+            log.error(error_msg)
+            return error_msg
 
         log.debug(f"Executing paste simulation command: {cmd_args}")
         try:
@@ -346,27 +340,22 @@ class ClipboardMixin:
 
             if result.returncode != 0:
                 error_output = result.stderr.strip() or result.stdout.strip()
-                error_msg = f"Paste simulation ({tool_name}) failed (code {result.returncode}): {error_output}"
+                error_msg = f"Paste simulation ({tool_name}) failed (code {result.returncode}): {error_output[:100]}"
                 log.error(error_msg)
-                # Don't flash here, happens after window is hidden
-                # self.flash_status(f"{tool_name} error: {error_output[:100]}")
-                return False
+                return error_msg
 
             log.info(f"Paste simulation ({tool_name}) command successful.")
-            return True
+            return None
 
         except FileNotFoundError:
             error_msg = f"Paste simulation command not found: '{cmd_args[0]}'. Is '{tool_name}' installed?"
             log.error(error_msg)
-            # self.flash_status(error_msg)
-            return False
+            return error_msg
         except subprocess.TimeoutExpired:
-            error_msg = f"Paste simulation command timed out: '{cmd_str}'"
+            error_msg = f"Paste simulation ({tool_name}) timed out: '{cmd_str}'"
             log.error(error_msg)
-            # self.flash_status(error_msg)
-            return False
+            return error_msg
         except Exception as e:
-            error_msg = f"Error running paste simulation command '{cmd_str}': {e}"
+            error_msg = f"Error running paste simulation ({tool_name}) '{cmd_str}': {e}"
             log.error(error_msg)
-            # self.flash_status(error_msg[:150])
-            return False
+            return error_msg
