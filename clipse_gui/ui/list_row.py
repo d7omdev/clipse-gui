@@ -259,27 +259,24 @@ def create_list_row_widget(
         row.add(event_box)
 
         def on_enter_notify(widget, event):
-            # Get the ListBoxRow parent
+            if event.mode != Gdk.CrossingMode.NORMAL:
+                return False
             listbox_row = widget.get_parent()  # EventBox -> ListBoxRow
             if listbox_row and isinstance(listbox_row, Gtk.ListBoxRow):
                 listbox = listbox_row.get_parent()  # ListBoxRow -> ListBox
                 if listbox and hasattr(listbox, "select_row"):
                     listbox.select_row(listbox_row)
+                    listbox_row.grab_focus()
             return False
 
         event_box.connect("enter-notify-event", on_enter_notify)
 
-    # Add single-click support if callback provided
     if single_click_callback:
 
         def on_button_press(widget, event):
-            # Single-click (left button) triggers paste
-            if event.button == 1:  # Left mouse button
-                # Check if it's a single click (not double-click)
-                # Double-click is handled by row-activated signal
-                if event.type == Gdk.EventType.BUTTON_PRESS:
-                    single_click_callback(row)
-                    return True  # Stop propagation
+            if event.button == 1 and event.type == Gdk.EventType.BUTTON_PRESS:
+                single_click_callback(row)
+                return True
             return False
 
         row.connect("button-press-event", on_button_press)

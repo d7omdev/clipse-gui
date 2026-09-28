@@ -38,9 +38,6 @@ DEFAULT_SETTINGS = {
         "border_radius": "6",
         "accent_color": "#ffcc00",
         "selection_color": "#4a90e2",
-        "selection_bg_color": "#4a90e2",
-        "hover_color": "#4a90e2",
-        "hover_bg_color": "#4a90e2",
         "visual_mode_color": "#9b59b6",
         "background_transparent": "False",
     },
@@ -111,9 +108,6 @@ CLEAR_SEARCH_ON_ESCAPE = config.getboolean(
 BORDER_RADIUS = config.getint("Style", "border_radius", fallback=6)
 ACCENT_COLOR = config.get("Style", "accent_color", fallback="#ffcc00")
 SELECTION_COLOR = config.get("Style", "selection_color", fallback="#4a90e2")
-SELECTION_BG_COLOR = config.get("Style", "selection_bg_color", fallback="#4a90e2")
-HOVER_COLOR = config.get("Style", "hover_color", fallback="#4a90e2")
-HOVER_BG_COLOR = config.get("Style", "hover_bg_color", fallback="#4a90e2")
 VISUAL_MODE_COLOR = config.get("Style", "visual_mode_color", fallback="#9b59b6")
 BACKGROUND_TRANSPARENT = config.getboolean(
     "Style", "background_transparent", fallback=False
@@ -247,6 +241,17 @@ def get_app_css(
     color: alpha(@theme_fg_color, 0.4);
     font-style: italic;
     font-size: 90%;
+}}
+.status-label.flash {{
+    color: @theme_fg_color;
+    font-style: normal;
+}}
+.status-label.error {{
+    color: #e5484d;
+}}
+.empty-state {{
+    color: alpha(@theme_fg_color, 0.45);
+    font-size: 110%;
 }}
 textview {{
     font-family: Monospace;

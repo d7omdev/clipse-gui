@@ -26,7 +26,7 @@ Behavior and workflow toggles.
 
 ### `compact_mode`
 - **Default:** `False`
-- Denser row layout. Hides metadata like timestamps.
+- Denser layout: smaller window, margins and thumbnails; the search field and pin filter button are hidden (`/` shows the search field). Timestamps still show.
 
 ### `protect_pinned_items`
 - **Default:** `False`
@@ -72,6 +72,10 @@ Behavior and workflow toggles.
 - **Default:** `True`
 - Preview window attempts to render images, format JSON, etc. Disable for plain-text only.
 
+### `clear_search_on_escape`
+- **Default:** `True`
+- When `True`, `Esc` clears the search query. When `False`, the query is kept and `Esc` only moves focus back to the list.
+
 ## `[Style]`
 
 See [Theming](theming.md) for full treatment. Keys:
@@ -79,10 +83,8 @@ See [Theming](theming.md) for full treatment. Keys:
 - `border_radius` — integer px, default `6`
 - `accent_color` — hex, used for pinned items and active toggles, default `#ffcc00`
 - `selection_color` — hex, default `#4a90e2`
-- `selection_bg_color` — hex, default `#4a90e2`
-- `hover_color` — hex, default `#4a90e2`
-- `hover_bg_color` — hex, default `#4a90e2`
 - `visual_mode_color` — hex, multi-select indicator, default `#9b59b6`
+- `background_transparent` — boolean, make the window background transparent (needs a compositor), default `False`
 
 ## `[Commands]`
 
@@ -164,15 +166,14 @@ tray_items_count = 20
 tray_paste_on_select = True
 open_links_with_browser = True
 preview_rich_content = True
+clear_search_on_escape = True
 
 [Style]
 border_radius = 8
 accent_color = #f5a623
 selection_color = #4a90e2
-selection_bg_color = #4a90e2
-hover_color = #4a90e2
-hover_bg_color = #4a90e2
 visual_mode_color = #9b59b6
+background_transparent = False
 
 [Commands]
 copy_tool_cmd = wl-copy

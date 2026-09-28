@@ -1,7 +1,7 @@
 """List view population, row creation, status label, and flash messages."""
 
 import logging
-from functools import partial
+import os
 
 from gi.repository import GLib, Gtk
 
@@ -36,11 +36,38 @@ class ListViewMixin:
         if load_count > 0:
             self._create_rows_range(0, load_count)
             self.list_box.show_all()
+        else:
+            self._set_empty_placeholder()
 
         if self.vadj and not self._vadjustment_handler_id:
             self._vadjustment_handler_id = self.vadj.connect(
                 "value-changed", self.on_vadjustment_changed
             )
+
+    def _set_empty_placeholder(self):
+        if not hasattr(self, "_empty_label"):
+            self._empty_label = Gtk.Label()
+            self._empty_label.set_line_wrap(True)
+            self._empty_label.set_justify(Gtk.Justification.CENTER)
+            self._empty_label.set_margin_top(24)
+            self._empty_label.set_margin_bottom(24)
+            self._empty_label.set_margin_start(24)
+            self._empty_label.set_margin_end(24)
+            self._empty_label.get_style_context().add_class("empty-state")
+            self._empty_label.show()
+            self.list_box.set_placeholder(self._empty_label)
+        if not self.items:
+            if os.path.exists(self.data_manager.file_path):
+                text = "History is empty"
+            else:
+                text = "No history yet. Is the clipse daemon running?\n(clipse -listen)"
+        elif self.show_only_pinned:
+            text = "No pinned items"
+        elif self.search_term:
+            text = f"No matches for '{self.search_term}'"
+        else:
+            text = "Nothing to show"
+        self._empty_label.set_text(text)
 
     def _create_rows_range(self, start_idx, end_idx):
         """Creates and adds rows for a given range of filtered items."""
@@ -128,6 +155,8 @@ class ListViewMixin:
 
         if not self.selection_mode:
             status_parts.append("Press ? for help")
+        if self.compact_mode:
+            status_parts.append("/ to search")
 
         final_status = " • ".join(status_parts)
         if self.status_label.get_text() != final_status:
@@ -135,13 +164,19 @@ class ListViewMixin:
 
     def flash_status(self, message, duration=2500):
         """Temporarily displays a message in the status bar."""
-        current_status = self.status_label.get_text()
         log.info(f"Status Flash: {message}")
+        ctx = self.status_label.get_style_context()
+        ctx.remove_class("error")
+        ctx.add_class("flash")
+        if message.startswith(("Error", "Cannot")):
+            ctx.add_class("error")
         self.status_label.set_text(message)
 
-        def revert_status(original_text):
+        def revert_status():
             if self.status_label.get_text() == message:
+                ctx.remove_class("flash")
+                ctx.remove_class("error")
                 self.update_status_label()
             return False
 
-        GLib.timeout_add(duration, partial(revert_status, current_status))
+        GLib.timeout_add(duration, revert_status)
