@@ -23,7 +23,6 @@ class TrayManager:
         self.status_icon = None
         self.menu = None
         self._is_tray_enabled = constants.MINIMIZE_TO_TRAY
-        self._last_items_hash = None  # Track if items changed
         self._setup_tray_icon()
 
     def _setup_tray_icon(self):
@@ -185,37 +184,6 @@ class TrayManager:
         except Exception as e:
             log.error(f"Error adding item to menu: {e}")
 
-    def _add_item_to_submenu_internal(self, submenu, item, index):
-        """Add single clipboard item to a specific submenu instance."""
-        if not submenu:
-            return
-        try:
-            # Deep copy item data to avoid any reference issues
-            item_copy = {
-                "value": item.get("value", ""),
-                "filePath": item.get("filePath", ""),
-                "recorded": item.get("recorded", ""),
-            }
-
-            value = item_copy["value"]
-            is_image = item_copy["filePath"] not in [None, "", "null"]
-
-            if is_image:
-                display_text = f"Image ({index})"
-            else:
-                clean_text = value.replace("\n", " ").replace("\t", " ").strip()
-                if len(clean_text) > 40:
-                    display_text = f"{clean_text[:37]}..."
-                else:
-                    display_text = clean_text if clean_text else f"Empty ({index})"
-
-            menu_item = Gtk.MenuItem.new_with_label(display_text)
-            menu_item.connect("activate", self._make_click_handler(item_copy))
-            menu_item.show()
-            submenu.append(menu_item)
-        except Exception as e:
-            log.error(f"Error adding item to submenu: {e}")
-
     def _copy_item_to_clipboard(self, item):
         """Copy selected item to clipboard"""
         try:
@@ -337,44 +305,17 @@ class TrayManager:
         log.debug("Building fresh tray menu")
 
         # Get current items
-        items = []
-        try:
-            if (
-                hasattr(self.application, "controller")
-                and self.application.controller
-                and hasattr(self.application.controller, "data_manager")
-            ):
-                items = self.application.controller.data_manager.load_history()
-        except Exception as e:
-            log.error(f"Error loading history for tray: {e}")
-            return
-
-        recent_items = items[: constants.TRAY_ITEMS_COUNT] if items else []
+        controller = getattr(self.application, "controller", None)
+        items = getattr(controller, "items", None) or []
+        recent_items = items[: constants.TRAY_ITEMS_COUNT]
 
         # Create completely new menu
         new_menu = Gtk.Menu()
 
         # Add clipboard items
         if recent_items:
-            visible_count = min(10, len(recent_items))
-
-            for i, item in enumerate(recent_items[:visible_count]):
+            for i, item in enumerate(recent_items):
                 self._add_item_to_menu_internal(new_menu, item, i + 1)
-
-            if len(recent_items) > visible_count:
-                more_item = Gtk.MenuItem.new_with_label(
-                    f"More... ({len(recent_items) - visible_count} items)"
-                )
-                more_menu = Gtk.Menu()
-
-                for i, item in enumerate(
-                    recent_items[visible_count:], visible_count + 1
-                ):
-                    self._add_item_to_submenu_internal(more_menu, item, i)
-
-                more_item.set_submenu(more_menu)
-                more_item.show()
-                new_menu.append(more_item)
 
             separator = Gtk.SeparatorMenuItem()
             separator.show()
