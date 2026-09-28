@@ -80,15 +80,18 @@ just uninstall   # Remove
 ## Usage
 
 ```bash
-clipse-gui
+clipse-gui                     # normal launch
+clipse-gui --theme nord        # try a theme for this run
 ```
 
 ### Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `/` or `f` | Search |
-| `Enter` | Copy item |
+| `/` or `f` or any letter | Search |
+| `Enter` | Copy item (also pastes with `enter_to_paste`) |
+| `Shift+Enter` | Copy and paste |
+| Click | Copy and paste |
 | `Space` | Preview |
 | `p` | Pin/unpin |
 | `x` or `Delete` | Delete |
@@ -98,6 +101,8 @@ clipse-gui
 | `Ctrl+B` | Format JSON in preview |
 | `Ctrl++/-/0` | Zoom |
 | `?` | Help |
+
+Full list: [docs/keybindings.md](docs/keybindings.md)
 
 ### Hyprland
 Add to `hyprland.conf`:
@@ -120,6 +125,10 @@ enter_to_paste = False              # Auto-paste after copy
 compact_mode = False                # Minimal UI
 hover_to_select = False             # Select on hover
 protect_pinned_items = False        # Prevent deleting pinned
+
+[Style]
+theme = catppuccin-mocha            # Built-in or ~/.config/clipse-gui/themes/<name>.css
+background_transparent = False      # Let a compositor blur show through
 
 [Commands]
 copy_tool_cmd = wl-copy            # Copy command (Wayland)
